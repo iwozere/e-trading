@@ -59,7 +59,17 @@ class UnknownReviewItemReasonError(ValueError):
     """Raised when a review item's `payload['reason']` has no registered confirm handler."""
 
 
-def confirm_item(item: Dict[str, Any], repo: Any, *, reviewed_by: str, note: str | None = None) -> str:
+class ReviewItemInputError(ValueError):
+    """Raised when a confirm is missing input its item needs (e.g. a process event's scope)."""
+
+
+# `p22_corporate_process_event.scope` values a reviewer may set on confirm (spec §2.6.1).
+PROCESS_SCOPES = ("whole_company", "asset_only", "unclear")
+
+
+def confirm_item(
+    item: Dict[str, Any], repo: Any, *, reviewed_by: str, note: str | None = None, scope: str | None = None
+) -> str:
     """
     Apply a human's "yes, this is correct" decision: perform the downstream
     write the item's `reason` calls for, then mark the item confirmed.
@@ -70,11 +80,15 @@ def confirm_item(item: Dict[str, Any], repo: Any, *, reviewed_by: str, note: str
         repo: A `P22Repo`-shaped object.
         reviewed_by: Human identifier for the audit trail.
         note: Optional free-text reviewer note.
+        scope: Required for a `strategic_alternatives_candidate` — one of `PROCESS_SCOPES`,
+            written onto the process event. Ignored for other reasons.
 
     Returns:
         A short human-readable description of what was written.
 
     Raises:
+        ReviewItemInputError: if a strategic-alternatives candidate is confirmed without a valid
+            `scope` (nothing is written).
         UnknownReviewItemReasonError: if `payload['reason']` isn't one of the
             reasons this module knows how to confirm — surfaced rather than
             silently marking the item confirmed with no write, which would
@@ -108,10 +122,17 @@ def confirm_item(item: Dict[str, Any], repo: Any, *, reviewed_by: str, note: str
             f"(known_from={known_from.isoformat()})"
         )
     elif reason == "strategic_alternatives_candidate":
-        repo.set_process_event_verified(payload["event_id"], is_verified=True)
+        # Block G's tiers need the scope (whole_company -> Tier 3, asset_only -> Tier 1), which only
+        # a reader of the 8-K can tell; ingest writes 'unclear'.
+        if scope not in PROCESS_SCOPES:
+            raise ReviewItemInputError(
+                f"Item {item['item_id']} is a strategic-alternatives candidate: pass --scope "
+                f"({' | '.join(PROCESS_SCOPES)}) to confirm it"
+            )
+        repo.set_process_event_verified(payload["event_id"], is_verified=True, scope=scope)
         outcome = (
             f"verified process event_id={payload['event_id']} for company_id={payload['company_id']} "
-            f"(state={payload['state']}, strength={payload['strength']})"
+            f"(state={payload['state']}, strength={payload['strength']}, scope={scope})"
         )
     elif reason == "deal_candidate":
         # A deal label needs many hand-entered fields a bare confirm cannot supply (spec §2.5).

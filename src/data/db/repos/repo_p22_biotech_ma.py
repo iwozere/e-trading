@@ -586,6 +586,15 @@ class P22Repo:
     # Block G — revealed process signals (spec §2.6, §4.7)
     # ------------------------------------------------------------------
 
+    def list_corporate_process_event_accessions(self) -> set[Tuple[int, str]]:
+        """Every `(company_id, accession_no)` already in `p22_corporate_process_event` — the
+        idempotency key of `upsert_corporate_process_event`, for skipping known 8-Ks before a fetch."""
+        rows = self.session.execute(
+            select(P22CorporateProcessEvent.company_id, P22CorporateProcessEvent.accession_no)
+            .where(P22CorporateProcessEvent.accession_no.is_not(None))
+        ).all()
+        return {(company_id, accession_no) for company_id, accession_no in rows if accession_no is not None}
+
     def upsert_corporate_process_event(
         self,
         *,
@@ -642,13 +651,17 @@ class P22Repo:
         self.session.flush()
         return row.event_id
 
-    def set_process_event_verified(self, event_id: int, *, is_verified: bool) -> None:
+    def set_process_event_verified(self, event_id: int, *, is_verified: bool, scope: Optional[str] = None) -> None:
         """Flip a `p22_corporate_process_event` row's verification gate (spec §4.7) — the
-        confirm/reject dispatch's job (`ingest/review_queue.py`), not the ingest's."""
+        confirm/reject dispatch's job (`ingest/review_queue.py`), not the ingest's. `scope`, when
+        given, replaces the ingest's 'unclear' with the reviewer's reading of the 8-K."""
+        values: Dict[str, Any] = {"is_verified": is_verified}
+        if scope is not None:
+            values["scope"] = scope
         self.session.execute(
             update(P22CorporateProcessEvent)
             .where(P22CorporateProcessEvent.event_id == event_id)
-            .values(is_verified=is_verified)
+            .values(**values)
         )
         self.session.flush()
 

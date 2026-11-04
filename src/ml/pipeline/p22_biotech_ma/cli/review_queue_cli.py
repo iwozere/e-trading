@@ -28,6 +28,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.services.database_service import DatabaseService
 from src.ml.pipeline.p22_biotech_ma.ingest.review_queue import (
+    PROCESS_SCOPES,
+    ReviewItemInputError,
     UnknownReviewItemReasonError,
     confirm_item,
     queue_depth_report,
@@ -83,8 +85,8 @@ def _cmd_confirm(args: argparse.Namespace) -> int:
             print(f"No review item with id={args.item_id}")
             return 1
         try:
-            outcome = confirm_item(item, uow.p22, reviewed_by=args.reviewer, note=args.note)
-        except UnknownReviewItemReasonError as exc:
+            outcome = confirm_item(item, uow.p22, reviewed_by=args.reviewer, note=args.note, scope=args.scope)
+        except (UnknownReviewItemReasonError, ReviewItemInputError) as exc:
             _logger.error("Cannot confirm item %s: %s", args.item_id, exc)
             print(f"Error: {exc}")
             return 1
@@ -121,6 +123,10 @@ def build_parser() -> argparse.ArgumentParser:
     confirm_parser.add_argument("item_id", type=int)
     confirm_parser.add_argument("--reviewer", required=True)
     confirm_parser.add_argument("--note", default=None)
+    confirm_parser.add_argument(
+        "--scope", choices=PROCESS_SCOPES, default=None,
+        help="Required for strategic_alternatives_candidate items: whole_company (Tier 3) or asset_only (Tier 1)",
+    )
     confirm_parser.set_defaults(func=_cmd_confirm)
 
     reject_parser = subparsers.add_parser("reject", help="Reject a review item (no downstream write)")

@@ -883,6 +883,14 @@ use in the code/config; this section exists so they're all in one place to walk 
   not attributed (MacroGenics/ImmunoGen, Akari/Celsus); GENETIC-type interventions (gene therapy)
   are not asset candidates; the raw zone names payloads by content hash, so two companies with
   byte-identical hit lists share one manifest.
+- **ADDED 2026-11-04: process-events backfill.** `p22_corporate_process_event` was empty on prod: the
+  job only ever scans yesterday's 8-K index, so nothing before late Oct 2026 was scanned and days whose
+  run was missed are never picked up. `run_process_events_ingest.py --start YYYY-MM-DD [--end ...]` scans
+  every business day in the range, commits per day, and lists EFTS-failed days in `days_failed`.
+  `ingest/process_events.run` now skips 8-Ks already in the table before fetching (a re-scan used to
+  queue a second review item for the same 8-K). Confirming a candidate used to set only `is_verified`,
+  leaving scope 'unclear', so a verified event could never reach a tier: `review_queue_cli confirm`
+  now requires `--scope whole_company|asset_only|unclear` for these items and writes it.
 - **FIXED 2026-11-03: Block G tiers rested on crossover funds and exited stakes.** After the 730-day
   13D/G backfill (9,904 positions), run 7 put 28 targets in Tier 1 and 21 in Tier 2. Tier 1 was mostly
   OrbiMed/Baker Bros/Redmile/Casdin/Deep Track/Cormorant 13D/As, and about half the Tier 2 "toeholds" were

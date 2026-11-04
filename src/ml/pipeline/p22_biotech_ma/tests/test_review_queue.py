@@ -11,6 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p22_biotech_ma.ingest.review_queue import (
+    ReviewItemInputError,
     UnknownReviewItemReasonError,
     confirm_item,
     queue_depth_report,
@@ -83,9 +84,8 @@ def test_confirm_fuzzy_alias_item_writes_alias_with_known_from_not_now():
     )
 
 
-def test_confirm_strategic_alternatives_candidate_verifies_process_event():
-    repo = MagicMock()
-    item = {
+def _strategic_item() -> dict:
+    return {
         "item_id": 4,
         "item_type": "strategic_alternatives_candidate",
         "payload": {
@@ -99,11 +99,26 @@ def test_confirm_strategic_alternatives_candidate_verifies_process_event():
         },
     }
 
-    outcome = confirm_item(item, repo, reviewed_by="alex")
 
-    repo.set_process_event_verified.assert_called_once_with(99, is_verified=True)
+def test_confirm_strategic_alternatives_candidate_verifies_process_event_with_scope():
+    repo = MagicMock()
+
+    outcome = confirm_item(_strategic_item(), repo, reviewed_by="alex", scope="whole_company")
+
+    repo.set_process_event_verified.assert_called_once_with(99, is_verified=True, scope="whole_company")
     repo.resolve_review_item.assert_called_once_with(item_id=4, status="confirmed", reviewed_by="alex", note=None)
-    assert "99" in outcome
+    assert "99" in outcome and "whole_company" in outcome
+
+
+@pytest.mark.parametrize("scope", [None, "entire_company"])
+def test_confirm_strategic_alternatives_candidate_requires_valid_scope(scope):
+    repo = MagicMock()
+
+    with pytest.raises(ReviewItemInputError):
+        confirm_item(_strategic_item(), repo, reviewed_by="alex", scope=scope)
+
+    repo.set_process_event_verified.assert_not_called()
+    repo.resolve_review_item.assert_not_called()
 
 
 def test_confirm_unknown_reason_raises_and_does_not_resolve():

@@ -174,6 +174,23 @@ def test_run_writes_candidate_event_and_review_item_on_match():
     assert review_kwargs["priority"] == 2  # strong match -> higher priority
 
 
+def test_run_skips_already_ingested_8k_before_fetching():
+    repo = MagicMock()
+    repo.list_companies_full.return_value = [{"company_id": 42, "cik": "0000000001"}]
+    repo.list_corporate_process_event_accessions.return_value = {(42, "0001193125-24-012345")}
+    edgar = MagicMock()
+    edgar.download_8k_filings.return_value = _index_df([
+        {"cik": "1", "company": "Target Bio", "accession_number": "0001193125-24-012345", "items": "8.01",
+         "description": "", "filed_date": "2026-09-01", "primary_document": "ex99.htm"},
+    ])
+
+    summary = run(repo, edgar)
+
+    assert summary["rejection_breakdown"] == {"already_ingested": 1}
+    edgar.fetch_filing_document.assert_not_called()
+    repo.add_review_item.assert_not_called()
+
+
 def test_run_no_match_does_not_write_anything():
     repo = MagicMock()
     repo.list_companies_full.return_value = [{"company_id": 42, "cik": "0000000001"}]

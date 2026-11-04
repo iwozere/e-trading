@@ -127,6 +127,9 @@ def run(repo: Any, edgar: Any, as_of_date: Optional[date] = None) -> Dict[str, A
     """
     phrases = load_strategic_process_phrases()
     companies_by_cik = {c["cik"]: c["company_id"] for c in repo.list_companies_full() if c.get("cik")}
+    # (company_id, accession_no) already written — skipped before the fetch, so a re-scan or a
+    # backfill overlapping the daily runs neither re-downloads nor queues a second review item.
+    already_ingested = repo.list_corporate_process_event_accessions()
 
     index_df = edgar.download_8k_filings(as_of_date)
 
@@ -150,6 +153,9 @@ def run(repo: Any, edgar: Any, as_of_date: Optional[date] = None) -> Dict[str, A
         primary_document = str(row.get("primary_document") or "")
         if not accession_number or not primary_document:
             skip_reasons["missing_accession_or_document"] += 1
+            continue
+        if (company_id, accession_number) in already_ingested:
+            skip_reasons["already_ingested"] += 1
             continue
 
         doc_text = edgar.fetch_filing_document(cik, accession_number, primary_document)
