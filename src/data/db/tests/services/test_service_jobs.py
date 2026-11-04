@@ -176,9 +176,6 @@ class TestJobsServiceSchedules:
         retrieved = service.get_schedule(schedule_id=schedule.id)
         assert retrieved is None
 
-    @pytest.mark.skip(
-        reason="Bug in service: trigger_schedule creates string job_id, fails Pydantic validation expecting int"
-    )
     def test_trigger_schedule(self, mock_database_service, db_session):
         """Test manually triggering a schedule."""
         service = JobsService(db_service=mock_database_service)
@@ -195,16 +192,16 @@ class TestJobsServiceSchedules:
         schedule = service.create_schedule(user_id=1, schedule_data=schedule_data)
 
         # Trigger it
-        # BUG: service creates job_id with string format (line 142 in jobs_service.py)
-        # but ScheduleRunCreate expects Optional[int]
         run = service.trigger_schedule(schedule_id=schedule.id)
         assert run is not None
         assert run.job_snapshot is not None
 
         assert run.job_type == JobType.SCREENER.value
         assert run.status == RunStatus.PENDING.value
-        assert "manual" in str(run.job_id)
+        # Same convention as the scheduler: job_id is the schedule id, the trigger type is in the snapshot
+        assert run.job_id == str(schedule.id)
         assert run.job_snapshot["schedule_id"] == schedule.id
+        assert run.job_snapshot["trigger_type"] == "manual"
 
     def test_trigger_disabled_schedule_fails(self, mock_database_service, db_session):
         """Test triggering a disabled schedule raises error."""
@@ -518,15 +515,10 @@ class TestJobsServiceHelpers:
 class TestJobsServiceScreener:
     """Tests for screener run creation."""
 
-    @pytest.mark.skip(
-        reason="Bug in service: create_screener_run creates string job_id, fails Pydantic validation expecting int"
-    )
     def test_create_screener_run_with_set(self, mock_database_service, db_session):
         """Test creating screener run with screener set."""
         service = JobsService(db_service=mock_database_service)
 
-        # BUG: service creates job_id with string format (line 377 in jobs_service.py)
-        # but ScheduleRunCreate expects Optional[int]
         run = service.create_screener_run(
             user_id=1, screener_set="sp500", filter_criteria={"volume": "> 1000000"}, top_n=10
         )
@@ -538,15 +530,10 @@ class TestJobsServiceScreener:
         assert run.job_snapshot["screener_set"] == "sp500"
         assert len(run.job_snapshot["tickers"]) > 0
 
-    @pytest.mark.skip(
-        reason="Bug in service: create_screener_run creates string job_id, fails Pydantic validation expecting int"
-    )
     def test_create_screener_run_with_tickers(self, mock_database_service, db_session):
         """Test creating screener run with ticker list."""
         service = JobsService(db_service=mock_database_service)
 
-        # BUG: service creates job_id with string format (line 377 in jobs_service.py)
-        # but ScheduleRunCreate expects Optional[int]
         run = service.create_screener_run(
             user_id=1, tickers=["AAPL", "MSFT", "GOOGL"], filter_criteria={"price": "> 100"}
         )
@@ -566,15 +553,10 @@ class TestJobsServiceScreener:
 class TestJobsServiceReport:
     """Tests for report run creation."""
 
-    @pytest.mark.skip(
-        reason="Bug in service: create_report_run creates string job_id, fails Pydantic validation expecting int"
-    )
     def test_create_report_run(self, mock_database_service, db_session):
         """Test creating report run."""
         service = JobsService(db_service=mock_database_service)
 
-        # BUG: service creates job_id with string format (line 406 in jobs_service.py)
-        # but ScheduleRunCreate expects Optional[int]
         run = service.create_report_run(
             user_id=1, report_type="weekly_summary", parameters={"start_date": "2025-01-01", "end_date": "2025-01-07"}
         )
