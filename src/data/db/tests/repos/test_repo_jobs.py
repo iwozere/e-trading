@@ -23,10 +23,11 @@ def test_jobs_repo_basic_flow(db_session: Session):
             "user_id": u.id,
             "job_type": JobType.SCREENER.value,
             "name": "daily-screener",
+            "target": "screener.daily",
+            "task_params": {},
             "cron": "0 12 * * *",
             "enabled": True,
             "next_run_at": now - timedelta(minutes=1),
-            "metadata": None,
         }
     )
     assert sched.id is not None

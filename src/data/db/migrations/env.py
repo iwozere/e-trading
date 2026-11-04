@@ -10,15 +10,18 @@ HERE = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../.."))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
-# Import Base and ensure models are imported so tables are registered on metadata
+# Import every model module so all tables are registered on Base.metadata.
+# A module missing here makes `alembic revision --autogenerate` propose dropping its tables.
 import src.data.db.models.model_jobs  # noqa: F401,E402
+import src.data.db.models.model_kestrel  # noqa: F401,E402
 import src.data.db.models.model_notification  # noqa: F401,E402
+import src.data.db.models.model_p22_biotech_ma  # noqa: F401,E402
 import src.data.db.models.model_short_squeeze  # noqa: F401,E402
+import src.data.db.models.model_signal_ledger  # noqa: F401,E402
 import src.data.db.models.model_system_health  # noqa: F401,E402
 import src.data.db.models.model_telegram  # noqa: F401,E402
+import src.data.db.models.model_trade_ledger  # noqa: F401,E402
 import src.data.db.models.model_trading  # noqa: F401,E402
-
-# Import model modules to populate Base.metadata
 import src.data.db.models.model_users  # noqa: F401,E402
 import src.data.db.models.model_webui  # noqa: F401,E402
 from src.data.db.core.base import Base  # noqa: E402

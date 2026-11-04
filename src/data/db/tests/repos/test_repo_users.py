@@ -12,7 +12,8 @@ def test_users_repo_telegram_flow(db_session: Session):
     r = UsersRepo(db_session)
 
     # ensure user by telegram id
-    u = ensure_user_for_telegram(r, "1001", defaults_user={"email": "alice@example.com"})
+    # admin recipients are selected by usr_users.role, not by the identity's is_admin flag
+    u = ensure_user_for_telegram(r, "1001", defaults_user={"email": "alice@example.com", "role": "admin"})
     assert u.id > 0
     assert u.email == "alice@example.com"
 

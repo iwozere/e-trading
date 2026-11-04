@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, Sequence
@@ -24,10 +23,6 @@ def _ensure_bot(s: Session, status: str = "stopped", bot_id: int | None = None):
     s.add(b)
     s.flush()
     return b
-
-
-def _uuid() -> str:
-    return str(uuid.uuid4())
 
 
 def _dec(x: Any) -> Decimal:
@@ -133,8 +128,8 @@ class PositionsRepo:
         if p:
             return p
 
+        # id is an autoincrement integer assigned by the DB
         p = Position(
-            id=_uuid(),
             bot_id=bot_id,
             trade_type=trade_type,
             symbol=symbol,

@@ -9,7 +9,7 @@ from src.data.db.core.constants import PROVIDER_TG
 
 
 def test_settings_and_feedback_and_broadcasts(db_session: Session):
-    u = User(username="tg_user", email="tg@example.com")
+    u = User(email="tg_user@example.com")  # username is derived from the email
     db_session.add(u)
     db_session.flush()
     identity = AuthIdentity(user_id=u.id, provider=PROVIDER_TG, external_id="7070")

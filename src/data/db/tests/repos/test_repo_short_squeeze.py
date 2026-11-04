@@ -19,7 +19,7 @@ def test_screener_and_metrics_and_alerts(db_session: Session):
     alerts = SqueezeAlertRepo(db_session)
 
     run_d = date.today()
-    screener.create_snapshot({"ticker": "AAA", "run_date": run_d, "screener_score": 10})
+    screener.create_snapshot({"ticker": "AAA", "run_date": run_d, "screener_score": 0.8})
     top = screener.get_top_candidates(run_d, limit=5)
     assert len(top) >= 1 and top[0].ticker == "AAA"
 

@@ -57,8 +57,9 @@ def test_messages_and_delivery_status(db_session: Session):
     msg = messages.create_message(
         {
             "message_type": "info",
+            "channels": ["telegram"],
             "recipient_id": "r1",
-            "payload": {"text": "hello"},
+            "content": {"message": "hello"},
             "priority": MessagePriority.NORMAL.value,
             "status": MessageStatus.PENDING.value,
             "scheduled_for": now - timedelta(minutes=1),

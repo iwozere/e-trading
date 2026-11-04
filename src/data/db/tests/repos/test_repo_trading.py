@@ -23,7 +23,7 @@ def test_bots_metrics_positions(db_session: Session):
     assert user.id > 0
 
     # upsert bot (integer PK, include required fields and config)
-    b = bots.upsert_bot({"id": 1, "user_id": user.id, "type": "paper", "status": "stopped", "config": {}})
+    b = bots.upsert_bot({"id": 1, "user_id": user.id, "status": "stopped", "config": {}})
     assert b.id == 1
 
     # heartbeat doesn't raise
