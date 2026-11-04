@@ -61,7 +61,7 @@ class TestShortSqueezeServiceAlerts:
             ticker="AAPL",
             alert_level=AlertLevel.MEDIUM,
             reason="Short interest spike",
-            analysis_data={"short_interest": 25.5},
+            squeeze_score=0.75,
         )
 
         assert alert_id is not None
@@ -73,8 +73,10 @@ class TestShortSqueezeServiceAlerts:
 
         # Create alert first
         alert_id = service.create_alert(
-            ticker="AAPL", alert_level=AlertLevel.HIGH, reason="Test alert", analysis_data={}
+            ticker="AAPL", alert_level=AlertLevel.HIGH, reason="Test alert", squeeze_score=0.9
         )
+
+        assert alert_id is not None
 
         # Mark as sent
         success = service.mark_alert_sent(alert_id=alert_id, notification_id="notif_123")
@@ -121,7 +123,7 @@ class TestShortSqueezeServiceFINRA:
             {"ticker": "AAPL", "settlement_date": date.today(), "short_interest": 1000000, "avg_daily_volume": 50000000}
         ]
 
-        count = service.store_finra_data(finra_data_list=finra_data)
+        count = service.store_finra_data(finra_data)
 
         assert isinstance(count, int)
         assert count >= 0
@@ -134,7 +136,7 @@ class TestShortSqueezeServiceFINRA:
         finra_data = [
             {"ticker": "AAPL", "settlement_date": date.today(), "short_interest": 1000000, "avg_daily_volume": 50000000}
         ]
-        service.store_finra_data(finra_data_list=finra_data)
+        service.store_finra_data(finra_data)
 
         # Get latest
         data = service.get_latest_finra_short_interest(ticker="AAPL")

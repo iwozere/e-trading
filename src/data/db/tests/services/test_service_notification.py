@@ -20,6 +20,12 @@ from src.data.db.services.notification_service import NotificationService
 from src.data.db.tests.fixtures.factory_notifications import MessageFactory
 
 
+def _age_failure(db_session, message, minutes: int = 10) -> None:
+    """Move the failure time back past the repo's 5-minute retry backoff."""
+    message.processed_at = datetime.now(UTC) - timedelta(minutes=minutes)
+    db_session.flush()
+
+
 class TestNotificationServiceMessages:
     """Tests for message operations."""
 
@@ -332,10 +338,12 @@ class TestNotificationServicePendingAndFailed:
             message_id=message.id, status=MessageStatus.FAILED.value, error_message="Temporary error"
         )
 
-        # Get failed messages for retry
+        # Just failed: still inside the retry backoff
+        assert not any(m.id == message.id for m in service.get_failed_messages_for_retry(limit=10))
+
+        _age_failure(db_session, message)
         failed = service.get_failed_messages_for_retry(limit=10)
 
-        assert len(failed) >= 1
         assert any(m.id == message.id for m in failed)
 
 
@@ -492,7 +500,8 @@ class TestNotificationServiceIntegration:
             message_id=message.id, status=MessageStatus.FAILED.value, error_message="Temporary error"
         )
 
-        # Get failed messages for retry
+        # Get failed messages for retry once the backoff has passed
+        _age_failure(db_session, message)
         failed = service.get_failed_messages_for_retry()
         assert any(m.id == message.id for m in failed)
 
