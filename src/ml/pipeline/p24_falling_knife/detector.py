@@ -262,6 +262,8 @@ def evaluate_bar(ctx: SeriesContext, t: int, params: TimeframeParams, seg_start:
         return None
     p1, l2 = int(ctx.peak_bars[t]), int(ctx.low_bars[t])
     start = p1 if seg_start is None else max(seg_start, p1)
+    # ADX/PPO/W extremes are local: one reference peak can carry several mountains (the book's Dow 2008-09 table).
+    start = max(start, t - params.extreme_window)
     ev = BarEval(t=t, p1=p1, l2=l2, drop=float(ctx.drop[t]), seg_start=start)
     ev.suspect_gap = bool(ctx.cliff[p1 + 1:l2 + 1].any())
     _check_adx(ctx, t, params, ev)

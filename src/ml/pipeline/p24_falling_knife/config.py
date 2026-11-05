@@ -42,6 +42,9 @@ class TimeframeParams:
     min_drop: float = 0.40
     max_bars_since_low: int = 5
 
+    # §4.4–§4.6 window (bars) for the local ADX peak, PPO trough and W minimum
+    extreme_window: int = 40
+
     # §4.4 ADX mountain bulge
     adx_min_peak: float = 30.0
     adx_min_rise: float = 8.0
@@ -60,9 +63,9 @@ class TimeframeParams:
     # §4.6 channel width
     w_narrow: float = 0.60
     max_xy_offset: int = 5
-    max_bars_after_wmin: int = 5
+    max_bars_after_wmin: int = 10
     w_eps: float = 0.02
-    max_low_to_wmin: int = 5
+    max_low_to_wmin: int = 10
     w_rearm: float = 0.30
 
     # §4.7 intermediate support and CCI divergence
@@ -115,15 +118,16 @@ DAILY_PARAMS = TimeframeParams(name=DAILY)
 
 WEEKLY_PARAMS = TimeframeParams(
     name=WEEKLY,
+    extreme_window=20,
     peak_lookback=104,
-    max_bars_since_low=3,
+    max_bars_since_low=8,
     adx_max_bars_after_peak=6,
     slope_bars=2,
     ppo_max_bars_after_trough=6,
     ppo_range_bars=260,
     max_xy_offset=3,
-    max_bars_after_wmin=3,
-    max_low_to_wmin=3,
+    max_bars_after_wmin=6,
+    max_low_to_wmin=6,
     support_bounce_pct=0.10,
     cci_trough_window=1,
     max_hold_bars=52,

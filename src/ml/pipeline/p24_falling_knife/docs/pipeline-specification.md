@@ -662,3 +662,19 @@ Consequences, binding for the implementation:
   suspect only if its volume is below `jump_volume_ratio` (3×) the prior 20-bar median.
 - **Second leg of a knife** (§4.8 re-arm): the ADX/PPO/W extremes are measured from the widest channel point after the
   re-arm, not from the re-arm bar itself (that picked up the first leg's decaying ADX).
+- **ADX peak, PPO trough and W minimum are local** (§4.4–§4.6): searched over `(max(P1, t − extreme_window), t]`,
+  `extreme_window` = 40 daily / 20 weekly, not over the whole `(P1, t]`. One reference top can carry several
+  mountains: the book's own Dow table has three (June 2008, Oct 2008, Mar 2009) under the 11,800 top. Over `(P1, t]` the
+  October 2008 mountain masked the March 2009 one and the book's Dow trade never fired; with the local window DIA signals
+  on 2009-03-11 at $69.38 and exits at $84.06 (book: ≈ 6,700 → 8,200 on the Dow).
+- **Narrowest-point windows match the ADX/PPO windows** (§4.6 items 3–4): `max_bars_after_wmin` and `max_low_to_wmin`
+  are 10 daily / 6 weekly (were 5 / 3), the same as `adx_max_bars_after_peak` / `ppo_max_bars_after_trough`. With 5,
+  a valley/mountain allowed to be 10 bars old could never pass the channel test; VMW Oct 2008 (book trade 2) had its
+  narrowest point at the first crash low on Oct 10 and the lower low with a shallower CCI on Oct 21.
+- **Weekly freshness `max_bars_since_low` = 8** (was 3). Weekly ADX lags: on QQQ the mountain topped 5 weeks after the
+  Nov 2008 low, so a 3-week limit dropped the bar before the mountain formed. The chapter (§8) says weekly channels are
+  long and the entry can be "anywhere between points 3 and 4". QQQ weekly then signals 2009-01-02 at $30.82 (book: ≈
+  1,500 on the Nasdaq). The parameter stays in the calibration grid.
+- **Book-example check, defaults after these fixes:** daily VMW 2008-10-22 $20.29 (book ≈ $20), MPWR 2008-12-09 $9.60
+  (book weekly ≈ $9), DIA 2009-03-11 $69.38; weekly QQQ 2009-01-02, DIA 2008-12-19. MPWR weekly fails narrowly (ADX
+  peak 31.1, CCI divergence 21 < 25). None of the defaults were tuned beyond the fixes listed above.
