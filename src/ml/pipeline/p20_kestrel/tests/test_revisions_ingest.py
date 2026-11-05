@@ -311,7 +311,7 @@ def test_run_upserts_in_chunks_and_reports_fmp_availability(monkeypatch, run_env
 
     monkeypatch.setattr(revisions_ingest, "upsert_signals", _fake_upsert)
 
-    def _fake_compute(ticker, fmp_key, finnhub_key, today, gate):
+    def _fake_compute(ticker, fmp_key, finnhub_key, today, gate, **kw):
         gate.closed = True  # simulate FMP quota exhausted mid-run
         return {"revisions_score": 1.0}
 
@@ -322,3 +322,34 @@ def test_run_upserts_in_chunks_and_reports_fmp_availability(monkeypatch, run_env
     assert batches == [2, 2, 1]
     assert result["rows_upserted"] == 5
     assert result["fmp_available"] is False
+
+
+def test_throttle_spaces_calls(monkeypatch):
+    clock = [100.0]
+    sleeps: list[float] = []
+    monkeypatch.setattr(revisions_ingest.time, "monotonic", lambda: clock[0])
+
+    def _sleep(s):
+        sleeps.append(s)
+        clock[0] += s
+
+    monkeypatch.setattr(revisions_ingest.time, "sleep", _sleep)
+    throttle = revisions_ingest._Throttle(1.1)
+
+    throttle.wait()
+    clock[0] += 0.3
+    throttle.wait()
+
+    assert sleeps == [pytest.approx(0.8)]
+
+
+def test_finnhub_429_retried_once_when_throttled(monkeypatch):
+    rows = [{"period": f"2026-0{m}-01", "strongBuy": 5 if m == 8 else 0, "buy": 0, "hold": 5, "sell": 0, "strongSell": 0}
+            for m in (5, 6, 7, 8)]
+    responses = iter([_FakeResponse(429, {}), _FakeResponse(200, rows)])
+    monkeypatch.setattr(revisions_ingest.requests, "get", lambda *a, **kw: next(responses))
+    monkeypatch.setattr(revisions_ingest.time, "sleep", lambda s: None)
+
+    result = _fetch_finnhub_momentum("NVDA", "k", revisions_ingest._Throttle(0))
+
+    assert result is not None and result > 0

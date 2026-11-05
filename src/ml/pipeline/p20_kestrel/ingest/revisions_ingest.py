@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List
@@ -67,6 +68,25 @@ _SIGNAL_FINNHUB_MOMENTUM = "finnhub_rec_momentum"
 _SIGNAL_REVISIONS_SCORE = "revisions_score"
 
 _UPSERT_CHUNK_TICKERS = 50  # flush signals every N tickers so a timeout keeps the work already done
+# Finnhub free tier allows 60 calls/min. Before the FMP gate the slow FMP calls paced the loop
+# (~40 Finnhub calls/min); without them the loop hit Finnhub's limit and 2026-11-05 kept 77/375 tickers.
+_FINNHUB_MIN_INTERVAL_S = 1.1
+_FINNHUB_429_BACKOFF_S = 30.0
+
+
+class _Throttle:
+    """Enforce a minimum interval between successive calls (single-threaded)."""
+
+    def __init__(self, min_interval_s: float) -> None:
+        self.min_interval_s = min_interval_s
+        self._last = float("-inf")
+
+    def wait(self) -> None:
+        """Sleep until at least ``min_interval_s`` has passed since the previous call."""
+        remaining = self._last + self.min_interval_s - time.monotonic()
+        if remaining > 0:
+            time.sleep(remaining)
+        self._last = time.monotonic()
 
 
 class _FmpGate:
@@ -215,7 +235,18 @@ def _net_bullish_score(row: Dict[str, Any]) -> float | None:
     ) / total
 
 
-def _fetch_finnhub_momentum(ticker: str, api_key: str) -> float | None:
+def _finnhub_get(ticker: str, api_key: str, throttle: _Throttle | None) -> requests.Response:
+    """Issue one paced Finnhub recommendation-trend request."""
+    if throttle is not None:
+        throttle.wait()
+    return requests.get(
+        _FINNHUB_RECOMMENDATION_URL,
+        params={"symbol": ticker, "token": api_key},
+        timeout=15,
+    )
+
+
+def _fetch_finnhub_momentum(ticker: str, api_key: str, throttle: _Throttle | None = None) -> float | None:
     """
     Compute analyst-recommendation momentum from Finnhub's recommendation trend.
 
@@ -225,16 +256,18 @@ def _fetch_finnhub_momentum(ticker: str, api_key: str) -> float | None:
     Args:
         ticker: Ticker symbol.
         api_key: Finnhub API key.
+        throttle: Optional pacer keeping calls under Finnhub's per-minute limit;
+            a 429 is retried once after ``_FINNHUB_429_BACKOFF_S``.
 
     Returns:
         Momentum, roughly in [-4, 4], or None on failure / insufficient history.
     """
     try:
-        resp = requests.get(
-            _FINNHUB_RECOMMENDATION_URL,
-            params={"symbol": ticker, "token": api_key},
-            timeout=15,
-        )
+        resp = _finnhub_get(ticker, api_key, throttle)
+        if resp.status_code == 429 and throttle is not None:
+            _logger.warning("Finnhub 429 for %s; backing off %.0fs and retrying once", ticker, _FINNHUB_429_BACKOFF_S)
+            time.sleep(_FINNHUB_429_BACKOFF_S)
+            resp = _finnhub_get(ticker, api_key, throttle)
         if resp.status_code != 200:
             _logger.debug("Finnhub recommendation non-200 for %s: %s", ticker, resp.status_code)
             return None
@@ -298,6 +331,7 @@ def _compute_ticker_signals(
     finnhub_api_key: str,
     today: date,
     gate: _FmpGate | None = None,
+    finnhub_throttle: _Throttle | None = None,
 ) -> Dict[str, float]:
     """
     Fetch all three raw signals for one ticker and blend them into `revisions_score`.
@@ -308,6 +342,7 @@ def _compute_ticker_signals(
         finnhub_api_key: Finnhub API key.
         today: Today's date.
         gate: Optional FMP circuit breaker shared across the run.
+        finnhub_throttle: Optional Finnhub pacer shared across the run.
 
     Returns:
         Dict of `signal_type -> value` for every signal successfully fetched,
@@ -324,7 +359,7 @@ def _compute_ticker_signals(
     if grades_net is not None:
         out[_SIGNAL_GRADES_NET_60D] = float(grades_net)
 
-    finnhub_momentum = _fetch_finnhub_momentum(ticker, finnhub_api_key)
+    finnhub_momentum = _fetch_finnhub_momentum(ticker, finnhub_api_key, finnhub_throttle)
     if finnhub_momentum is not None:
         out[_SIGNAL_FINNHUB_MOMENTUM] = finnhub_momentum
 
@@ -379,11 +414,14 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
         _logger.info("Revisions ingest: %d tickers (watchlist ∪ positions)", len(tickers))
 
         gate = _FmpGate()
+        finnhub_throttle = _Throttle(_FINNHUB_MIN_INTERVAL_S)
         pending: List[Dict[str, Any]] = []
         processed = 0
         rows_upserted = 0
         for idx, ticker in enumerate(tickers, start=1):
-            signals = _compute_ticker_signals(ticker, fmp_api_key, finnhub_api_key, target_date, gate)
+            signals = _compute_ticker_signals(
+                ticker, fmp_api_key, finnhub_api_key, target_date, gate, finnhub_throttle=finnhub_throttle
+            )
             if signals:
                 processed += 1
                 for signal_type, value in signals.items():
