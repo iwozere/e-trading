@@ -251,12 +251,13 @@ def validate_bot_config_json(config_json: str) -> Tuple[bool, List[str], List[st
         return False, [f"Validation error: {str(e)}"], []
 
 
-def validate_database_bot_record(bot_record: Dict[str, Any]) -> Tuple[bool, List[str], List[str]]:
+def validate_database_bot_record(bot_record: Dict[str, Any], new_record: bool = False) -> Tuple[bool, List[str], List[str]]:
     """
     Validate a complete bot record from the database.
 
     Args:
         bot_record: Complete bot record from trading_bots table
+        new_record: True for a bot not yet inserted; its id is assigned by the database
 
     Returns:
         Tuple of (is_valid, errors, warnings)
@@ -264,8 +265,7 @@ def validate_database_bot_record(bot_record: Dict[str, Any]) -> Tuple[bool, List
     errors = []
     warnings = []
 
-    # Validate database record fields (excluding 'type' as per user directive)
-    required_db_fields = ["id", "user_id", "status", "config"]
+    required_db_fields = ["user_id", "status", "config"] if new_record else ["id", "user_id", "status", "config"]
     for field in required_db_fields:
         if field not in bot_record or bot_record[field] is None:
             errors.append(f"Missing required database field: {field}")

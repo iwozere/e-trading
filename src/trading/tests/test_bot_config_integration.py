@@ -154,7 +154,6 @@ class TestBotConfigValidator:
         bot_record = {
             "id": 1,
             "user_id": 1,
-            "type": "paper",
             "status": "stopped",
             "config": {
                 "id": "test_bot_1",
@@ -185,6 +184,13 @@ class TestBotConfigValidator:
         is_valid, errors, _ = validate_database_bot_record(bot_record)
 
         assert is_valid, f"Database record should be valid. Errors: {errors}"
+
+        # A bot about to be created has no id yet: the database assigns it
+        new_bot = {**bot_record, "id": None}
+        is_valid, errors, _ = validate_database_bot_record(new_bot)
+        assert not is_valid and "Missing required database field: id" in errors
+        is_valid, errors, _ = validate_database_bot_record(new_bot, new_record=True)
+        assert is_valid, f"New bot record should be valid. Errors: {errors}"
 
     def test_invalid_database_record(self):
         """Test validation of invalid database record."""
