@@ -11,8 +11,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from enum import Enum
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, Integer, String, Text, func
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, Index, Integer, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql.elements import conv
 
 from src.data.db.core.base import Base
 from src.notification.logger import setup_logger
@@ -47,31 +48,36 @@ class SystemHealth(Base):
 
     __tablename__ = "msg_system_health"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
-    system: Mapped[str] = mapped_column(String(50), index=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    system: Mapped[str] = mapped_column(String(50))
     component: Mapped[str | None] = mapped_column(String(100))  # For specific components within a system
-    status: Mapped[str] = mapped_column(String(20), index=True)
+    status: Mapped[str] = mapped_column(String(20))
     last_success: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_failure: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    failure_count: Mapped[int] = mapped_column(Integer, default=0)
+    failure_count: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     avg_response_time_ms: Mapped[int | None] = mapped_column(Integer)
     error_message: Mapped[str | None] = mapped_column(Text)
     system_metadata: Mapped[str | None] = mapped_column("metadata", Text)  # JSON string for system-specific data
-    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now(), index=True)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now(), server_default=func.now())
 
-    # Constraints
+    # Constraints and indexes exactly as in prod; the msg_channel_health_* names date from the table's old name.
+    # conv() keeps a name verbatim instead of applying the naming convention.
     __table_args__ = (
         CheckConstraint(
             f"status IN ('{SystemHealthStatus.HEALTHY.value}', "
             f"'{SystemHealthStatus.DEGRADED.value}', "
             f"'{SystemHealthStatus.DOWN.value}', "
             f"'{SystemHealthStatus.UNKNOWN.value}')",
-            name="check_system_health_status",
+            name=conv("check_system_health_status"),
         ),
-        CheckConstraint("failure_count >= 0", name="check_failure_count_positive"),
-        CheckConstraint("avg_response_time_ms >= 0", name="check_avg_response_time_positive"),
-        # Unique constraint on system + component combination
-        CheckConstraint("(system, COALESCE(component, '')) IS NOT NULL", name="check_system_component_unique"),
+        CheckConstraint("failure_count >= 0", name=conv("msg_channel_health_failure_count_check")),
+        CheckConstraint("avg_response_time_ms >= 0", name=conv("msg_channel_health_avg_response_time_ms_check")),
+        Index("idx_channel_health_checked", "checked_at"),
+        Index("idx_channel_health_status", "status"),
+        Index("idx_system_health_system", "system"),
+        # One row per system + component (NULL component = the system itself)
+        Index("idx_system_health_unique", "system", text("COALESCE(component, '')"), unique=True),
+        {"comment": "Health monitoring for notification channels"},
     )
 
     def __repr__(self):

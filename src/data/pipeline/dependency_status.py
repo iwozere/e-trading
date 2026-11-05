@@ -99,7 +99,7 @@ def check_dependency(name: str, *, as_of: Optional[date] = None) -> DependencySt
 
         run = (
             s.query(ScheduleRun)
-            .filter(ScheduleRun.job_id == str(schedule.id))
+            .filter(ScheduleRun.job_id == schedule.id)
             .filter(ScheduleRun.scheduled_for >= datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc))
             .filter(ScheduleRun.scheduled_for < datetime.combine(today, datetime.max.time(), tzinfo=timezone.utc))
             .order_by(ScheduleRun.scheduled_for.desc())

@@ -17,10 +17,13 @@ from sqlalchemy import (
     Integer,
     Numeric,
     Text,
+    ForeignKey,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql.elements import conv
 
 from src.data.db.core.base import Base
 from src.data.db.core.json_types import JsonType
@@ -46,6 +49,7 @@ class K20Universe(Base):
         Text,
         nullable=False,
         default="active",
+        server_default=text("'active'"),
     )
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
@@ -166,7 +170,7 @@ class K20Catalyst(Base):
     source: Mapped[str | None] = mapped_column(Text)
     notes: Mapped[str | None] = mapped_column(Text)
     catalyst_detail: Mapped[dict | None] = mapped_column(JsonType())
-    state: Mapped[str] = mapped_column(Text, nullable=False, default="upcoming")
+    state: Mapped[str] = mapped_column(Text, nullable=False, default="upcoming", server_default=text("'upcoming'"))
     t10_alerted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     t3_alerted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     datechange_alerted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -218,13 +222,13 @@ class K20Watchlist(Base):
     sleeve: Mapped[str] = mapped_column(Text, primary_key=True)
     score: Mapped[float | None] = mapped_column(Numeric(asdecimal=False))
     llm_verdict: Mapped[str | None] = mapped_column(Text)
-    dossier_run_id: Mapped[int | None] = mapped_column(BigInteger)
+    dossier_run_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("k20_llm_runs.id", name=conv("fk_k20_watchlist_dossier")))
     thesis_short: Mapped[str | None] = mapped_column(Text)
     added_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
     )
-    state: Mapped[str] = mapped_column(Text, nullable=False, default="screening")
+    state: Mapped[str] = mapped_column(Text, nullable=False, default="screening", server_default=text("'screening'"))
 
     __table_args__ = (
         CheckConstraint(
@@ -251,8 +255,8 @@ class K20Position(Base):
     t1_px: Mapped[float | None] = mapped_column(Numeric(12, 4, asdecimal=False))
     t2_px: Mapped[float | None] = mapped_column(Numeric(12, 4, asdecimal=False))
     trail_pct: Mapped[float | None] = mapped_column(Numeric(5, 2, asdecimal=False))
-    realized_thirds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    status: Mapped[str] = mapped_column(Text, nullable=False, default="open")
+    realized_thirds: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="open", server_default=text("'open'"))
     notes: Mapped[str | None] = mapped_column(Text)
 
     __table_args__ = (
@@ -269,7 +273,7 @@ class K20RequestBudget(Base):
     source: Mapped[str] = mapped_column(Text, primary_key=True)
     date: Mapped[date] = mapped_column(Date, primary_key=True)
     quota: Mapped[int] = mapped_column(Integer, nullable=False)
-    used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    used: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
     notes: Mapped[dict | None] = mapped_column(JsonType())
 
 
@@ -280,7 +284,7 @@ class K20JobRun(Base):
 
     job: Mapped[str] = mapped_column(Text, primary_key=True)
     run_date: Mapped[date] = mapped_column(Date, primary_key=True)
-    status: Mapped[str] = mapped_column(Text, nullable=False, default="running")
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="running", server_default=text("'running'"))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     rows_out: Mapped[int | None] = mapped_column(Integer)

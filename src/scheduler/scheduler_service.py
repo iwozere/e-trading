@@ -1427,7 +1427,7 @@ class SchedulerService:
         # Create run data
         run_data = ScheduleRunCreate(
             job_type=JobType(schedule.job_type),
-            job_id=str(schedule.id),
+            job_id=schedule.id,
             scheduled_for=datetime.now(UTC),
             job_snapshot=job_snapshot,
         )

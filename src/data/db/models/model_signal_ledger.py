@@ -23,6 +23,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -93,5 +94,5 @@ class SignalBookNav(Base):
     benchmark_nav: Mapped[float] = mapped_column(Numeric(asdecimal=False), nullable=False)
     invested: Mapped[float] = mapped_column(Numeric(asdecimal=False), nullable=False)
     positions: Mapped[int] = mapped_column(Integer, nullable=False)
-    opened: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    closed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    opened: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    closed: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))

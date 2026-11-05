@@ -22,26 +22,27 @@ def test_bots_metrics_positions(db_session: Session):
     user = ensure_user_for_telegram(users, "bot-user-1", defaults_user={"email": "botuser@example.com"})
     assert user.id > 0
 
-    # upsert bot (integer PK, include required fields and config)
-    b = bots.upsert_bot({"id": 1, "user_id": user.id, "status": "stopped", "config": {}})
-    assert b.id == 1
+    # upsert bot: the id is an identity column (GENERATED ALWAYS), so the DB assigns it
+    b = bots.upsert_bot({"user_id": user.id, "status": "stopped", "config": {}})
+    assert b.id is not None
+    bot_id = b.id
 
     # heartbeat doesn't raise
-    bots.heartbeat(1)
+    bots.heartbeat(bot_id)
 
     # metrics add / latest
     m1 = metrics.add(
-        {"bot_id": 1, "trade_type": "paper", "calculated_at": datetime.now(UTC), "metrics": {"pnl": {"net": 0}}}
+        {"bot_id": bot_id, "trade_type": "paper", "calculated_at": datetime.now(UTC), "metrics": {"pnl": {"net": 0}}}
     )
     m2 = metrics.add(
-        {"bot_id": 1, "trade_type": "paper", "calculated_at": datetime.now(UTC), "metrics": {"pnl": {"net": 1}}}
+        {"bot_id": bot_id, "trade_type": "paper", "calculated_at": datetime.now(UTC), "metrics": {"pnl": {"net": 1}}}
     )
-    latest = metrics.latest_for_bot(1, limit=1)
+    latest = metrics.latest_for_bot(bot_id, limit=1)
     assert len(latest) == 1
     assert latest[0].id in {m1.id, m2.id}
 
     # positions ensure + apply fills
-    p = positions.ensure_open(bot_id=1, trade_type="live", symbol="BTCUSDT", direction="long")
+    p = positions.ensure_open(bot_id=bot_id, trade_type="live", symbol="BTCUSDT", direction="long")
     assert p.status == "open"
     # add
     p = positions.apply_fill(position_id=p.id, action="buy", qty=1, price=100)

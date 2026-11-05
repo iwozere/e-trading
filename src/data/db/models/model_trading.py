@@ -9,9 +9,10 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, Numeric, String, Text, event, func
+from sqlalchemy import DateTime, ForeignKey, Identity, Index, Integer, Numeric, String, Text, event, func, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql.elements import conv
 
 from src.data.db.core.base import Base
 from src.data.db.core.json_types import JsonType
@@ -22,8 +23,8 @@ class BotInstance(Base):
 
     __tablename__ = "trading_bots"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("usr_users.id", ondelete="CASCADE"))
+    id: Mapped[int] = mapped_column(Integer, Identity(always=True), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("usr_users.id", ondelete="CASCADE", name=conv("trading_bots_user_id_fkey")))
     status: Mapped[str] = mapped_column(String(20))  # 'running', 'stopped', etc.
     started_at: Mapped[DateTime | None] = mapped_column(DateTime)
     last_heartbeat: Mapped[DateTime | None] = mapped_column(DateTime)
@@ -31,10 +32,12 @@ class BotInstance(Base):
     current_balance: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
     total_pnl: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
     extra_metadata: Mapped[dict | None] = mapped_column(JsonType())
-    created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), default=func.now())
+    created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), default=func.now(), server_default=func.now())
     updated_at: Mapped[DateTime | None] = mapped_column(DateTime)
     config: Mapped[dict] = mapped_column(JsonType(), info={"required": True})
-    description: Mapped[str | None] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(
+        Text, comment="Trading bot description. Defined by the trader, who creates the bot."
+    )
 
     # Relationships
     trades = relationship("Trade", back_populates="bot", cascade="all, delete-orphan")
@@ -50,8 +53,8 @@ class Trade(Base):
 
     __tablename__ = "trading_trades"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    bot_id: Mapped[int] = mapped_column(ForeignKey("trading_bots.id", ondelete="CASCADE"))
+    id: Mapped[int] = mapped_column(Integer, Identity(always=True), primary_key=True)
+    bot_id: Mapped[int] = mapped_column(ForeignKey("trading_bots.id", ondelete="CASCADE", name=conv("trading_trades_bot_id_fkey")))
     trade_type: Mapped[str] = mapped_column(String(10))  # 'paper' or 'live'
     strategy_name: Mapped[str | None] = mapped_column(String(100))
     entry_logic_name: Mapped[str] = mapped_column(String(100))
@@ -77,9 +80,9 @@ class Trade(Base):
     exit_reason: Mapped[str | None] = mapped_column(String(100))
     status: Mapped[str] = mapped_column(String(20))
     extra_metadata: Mapped[dict | None] = mapped_column(JsonType())
-    created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), default=func.now())
+    created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), default=func.now(), server_default=func.now())
     updated_at: Mapped[DateTime | None] = mapped_column(DateTime)
-    position_id: Mapped[int | None] = mapped_column(ForeignKey("trading_positions.id", ondelete="SET NULL"))
+    position_id: Mapped[int | None] = mapped_column(ForeignKey("trading_positions.id", ondelete="SET NULL", name=conv("trading_trades_position_id_fkey")))
 
     # Relationships
     bot = relationship("BotInstance", foreign_keys=[bot_id], back_populates="trades")
@@ -92,6 +95,7 @@ class Trade(Base):
         Index("ix_trading_trades_strategy_name", "strategy_name"),
         Index("ix_trading_trades_symbol", "symbol"),
         Index("ix_trading_trades_trade_type", "trade_type"),
+        {"comment": "Individual trade records"},
     )
 
     def __repr__(self):
@@ -103,16 +107,16 @@ class Position(Base):
 
     __tablename__ = "trading_positions"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    bot_id: Mapped[int] = mapped_column(ForeignKey("trading_bots.id", ondelete="CASCADE"))
+    id: Mapped[int] = mapped_column(Integer, Identity(always=True), primary_key=True)
+    bot_id: Mapped[int] = mapped_column(ForeignKey("trading_bots.id", ondelete="CASCADE", name=conv("trading_positions_bot_id_fkey")))
     trade_type: Mapped[str] = mapped_column(String(10))  # 'paper' or 'live'
     symbol: Mapped[str] = mapped_column(String(20))
     direction: Mapped[str] = mapped_column(String(10))
     opened_at: Mapped[DateTime | None] = mapped_column(DateTime)
     closed_at: Mapped[DateTime | None] = mapped_column(DateTime)
-    qty_open: Mapped[Decimal] = mapped_column(Numeric(20, 8), default=0)
+    qty_open: Mapped[Decimal] = mapped_column(Numeric(20, 8), default=0, server_default=text("0"))
     avg_price: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
-    realized_pnl: Mapped[Decimal | None] = mapped_column(Numeric(20, 8), default=0)
+    realized_pnl: Mapped[Decimal | None] = mapped_column(Numeric(20, 8), default=0, server_default=text("0"))
     status: Mapped[str] = mapped_column(String(12))
     extra_metadata: Mapped[dict | None] = mapped_column(JsonType())
 
@@ -123,6 +127,7 @@ class Position(Base):
     __table_args__ = (
         Index("ix_trading_positions_bot_id", "bot_id"),
         Index("ix_trading_positions_symbol", "symbol"),
+        {"comment": "Open and closed trading positions"},
     )
 
     def __repr__(self):
@@ -134,8 +139,8 @@ class PerformanceMetric(Base):
 
     __tablename__ = "trading_performance_metrics"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    bot_id: Mapped[int] = mapped_column(ForeignKey("trading_bots.id", ondelete="CASCADE"))
+    id: Mapped[int] = mapped_column(Integer, Identity(always=True), primary_key=True)
+    bot_id: Mapped[int] = mapped_column(ForeignKey("trading_bots.id", ondelete="CASCADE", name=conv("trading_perf_metrics_bot_id_fkey")))
     trade_type: Mapped[str] = mapped_column(String(10))  # 'paper' or 'live'
     symbol: Mapped[str | None] = mapped_column(String(20))
     interval: Mapped[str | None] = mapped_column(String(10))
@@ -143,7 +148,7 @@ class PerformanceMetric(Base):
     exit_logic_name: Mapped[str | None] = mapped_column(String(100))
     metrics: Mapped[dict] = mapped_column(JsonType())
     calculated_at: Mapped[DateTime | None] = mapped_column(DateTime)
-    created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), default=func.now())
+    created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), default=func.now(), server_default=func.now())
 
     # Relationship
     bot = relationship("BotInstance", foreign_keys=[bot_id], back_populates="performance_metrics")
@@ -152,6 +157,7 @@ class PerformanceMetric(Base):
         Index("ix_trading_performance_metrics_bot_id", "bot_id"),
         Index("ix_trading_performance_metrics_calculated_at", "calculated_at"),
         Index("ix_trading_performance_metrics_symbol", "symbol"),
+        {"comment": "Performance metrics for trading strategies"},
     )
 
     def __repr__(self):

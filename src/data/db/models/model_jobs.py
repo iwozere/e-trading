@@ -10,13 +10,25 @@ from __future__ import annotations
 from datetime import datetime as dt
 from enum import StrEnum
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Identity,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql.elements import conv
 
 from src.data.db.core.base import Base
-from src.data.db.core.json_types import JsonType
-
-## For PostgreSQL we prefer the native JSONB type
+from src.data.db.core.json_types import JsonText, JsonType
 
 
 class JobType(StrEnum):
@@ -47,30 +59,24 @@ class Schedule(Base):
 
     __tablename__ = "job_schedules"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    id: Mapped[int] = mapped_column(Integer, Identity(always=True), primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False)
     name: Mapped[str] = mapped_column(String(255))
-    job_type: Mapped[str] = mapped_column(String(50))
+    job_type: Mapped[str] = mapped_column(String(50))  # validated by JobType on the Python side
     target: Mapped[str] = mapped_column(String(255))
-    task_params: Mapped[dict] = mapped_column(JsonType(), default={})
+    task_params: Mapped[dict] = mapped_column(JsonType(), default=dict, server_default=text("'{}'::jsonb"))
     cron: Mapped[str] = mapped_column(String(100))
-    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
-    next_run_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), index=True)
-    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now())
-    updated_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
-    state_json: Mapped[dict] = mapped_column(JsonType(), default={})
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+    next_run_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now(), server_default=func.now())
+    updated_at: Mapped[dt] = mapped_column(
+        DateTime(timezone=True), default=func.now(), onupdate=func.now(), server_default=func.now()
+    )
+    # TEXT in prod (pre-JSONB legacy column); JsonText stores dicts as JSON text and reads them back as dicts
+    state_json: Mapped[dict | None] = mapped_column(JsonText(), default=dict, server_default=text("'{}'::text"))
 
     # Constraints
-    __table_args__ = (
-        CheckConstraint(
-            "job_type IN ('report', 'screener', 'alert', 'notification', 'data_processing', 'backup', 'script', 'schedule')",
-            name="check_job_type",
-        ),
-        # Use an explicit unique constraint for user_id + name
-        UniqueConstraint("user_id", "name", name="unique_user_schedule_name"),
-        Index("idx_schedules_enabled", "enabled"),
-        Index("idx_schedules_next_run_at", "next_run_at"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "name", name="unique_user_schedule_name"),)
 
     def __repr__(self):
         return f"<Schedule(id={self.id}, name='{self.name}', job_type='{self.job_type}', enabled={self.enabled})>"
@@ -81,24 +87,24 @@ class ScheduleRun(Base):
 
     __tablename__ = "job_schedule_runs"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, Identity(always=True), primary_key=True)
     job_type: Mapped[str] = mapped_column(Text)
-    job_id: Mapped[str | None] = mapped_column(String(255))
-    user_id: Mapped[int | None] = mapped_column(Integer)
+    # The schedule this run belongs to; NULL for ad-hoc runs (API-triggered reports / screeners)
+    job_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("job_schedules.id", ondelete="CASCADE", name=conv("job_schedule_runs_job_id_fkey"))
+    )
+    user_id: Mapped[int | None] = mapped_column(BigInteger)
     status: Mapped[str | None] = mapped_column(Text)
     scheduled_for: Mapped[dt | None] = mapped_column(DateTime(timezone=True))
-    enqueued_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=func.now())
+    enqueued_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=func.now(), server_default=func.now())
     started_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True))
     job_snapshot: Mapped[dict | None] = mapped_column(JsonType())
     result: Mapped[dict | None] = mapped_column(JsonType())
     error: Mapped[str | None] = mapped_column(Text)
 
-    # Constraints - using Index instead of UniqueConstraint for better SQLite compatibility
-    __table_args__ = (
-        # Unique constraint on job_type + job_id + scheduled_for
-        UniqueConstraint("job_type", "job_id", "scheduled_for", name="ux_runs_job_scheduled_for"),
-    )
+    # Prod has this as a unique index (not a constraint): one run per job and scheduled time
+    __table_args__ = (Index("ux_runs_job_scheduled_for", "job_type", "job_id", "scheduled_for", unique=True),)
 
     def __repr__(self):
         return f"<ScheduleRun(id={self.id}, job_type='{self.job_type}', status='{self.status}')>"

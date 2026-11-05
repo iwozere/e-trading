@@ -206,7 +206,7 @@ async def get_run_logs(
 
         snapshot = run.job_snapshot or {}
         schedule_name = snapshot.get("schedule_name") or ""
-        job_id_str = run.job_id or ""
+        job_id_str = run.job_id or snapshot.get("run_label") or ""  # ad-hoc runs keep their label in the snapshot
         pipeline_name = schedule_name or job_id_str
         name_lower = f"{schedule_name} {job_id_str}".lower().replace(" ", "_").replace("-", "_")
 

@@ -147,7 +147,7 @@ def _match_schedule_id(snapshot: Dict[str, Any], job_id: Any, schedules: List[Sc
 
     Args:
         snapshot: The run's job_snapshot (may be empty).
-        job_id: The run's job_id; the model declares String, but the prod column holds integers.
+        job_id: The run's job_id (integer schedule id, or None for ad-hoc runs).
         schedules: All known schedules.
 
     Returns:

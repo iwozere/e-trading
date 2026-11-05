@@ -143,7 +143,7 @@ class JobsService(BaseDBService):
 
         run_data = ScheduleRunCreate(
             job_type=JobType(schedule.job_type),
-            job_id=str(schedule_id),
+            job_id=schedule_id,
             scheduled_for=datetime.now(UTC),
             job_snapshot={
                 "schedule_id": schedule_id,
@@ -404,13 +404,13 @@ class JobsService(BaseDBService):
             "ticker_count": len(expanded_tickers),
         }
 
-        # Create job ID
-        job_id = f"screener_{screener_set or 'custom'}_{datetime.now(UTC).timestamp()}"
+        # Ad-hoc run: no schedule, so job_id stays NULL (it is a FK to job_schedules); the label goes in the snapshot
+        job_snapshot["run_label"] = f"screener_{screener_set or 'custom'}_{datetime.now(UTC).timestamp()}"
 
         # Create run
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
-            job_id=job_id,
+            job_id=None,
             scheduled_for=scheduled_for or datetime.now(UTC),
             job_snapshot=job_snapshot,
         )
@@ -430,13 +430,13 @@ class JobsService(BaseDBService):
         # Create job snapshot
         job_snapshot = {"report_type": report_type, "parameters": parameters or {}}
 
-        # Create job ID
-        job_id = f"report_{report_type}_{datetime.now(UTC).timestamp()}"
+        # Ad-hoc run: no schedule, so job_id stays NULL (it is a FK to job_schedules); the label goes in the snapshot
+        job_snapshot["run_label"] = f"report_{report_type}_{datetime.now(UTC).timestamp()}"
 
         # Create run
         run_data = ScheduleRunCreate(
             job_type=JobType.REPORT,
-            job_id=job_id,
+            job_id=None,
             scheduled_for=scheduled_for or datetime.now(UTC),
             job_snapshot=job_snapshot,
         )

@@ -42,6 +42,18 @@ if config.config_file_name is not None:
 # target_metadata = None
 target_metadata = Base.metadata
 
+# Tables in the DB that no model describes, on purpose:
+# - apscheduler_jobs: owned by APScheduler's SQLAlchemyJobStore
+UNMODELED_TABLES = frozenset({"apscheduler_jobs"})
+
+
+def include_object(obj, name, type_, reflected, compare_to):  # noqa: ARG001 - alembic hook signature
+    """Keep unmodeled tables (and their indexes) out of autogenerate / `alembic check`."""
+    if type_ == "table":
+        return name not in UNMODELED_TABLES
+    table = getattr(obj, "table", None)
+    return getattr(table, "name", None) not in UNMODELED_TABLES
+
 
 def _get_db_url() -> str:
     # Prefer explicit env var, then ini value, then code config
@@ -83,6 +95,7 @@ def run_migrations_offline() -> None:
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
         compare_server_default=True,
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -109,7 +122,7 @@ def run_migrations_online() -> None:
             target_metadata=target_metadata,
             compare_type=True,
             compare_server_default=True,
-            # when using multiple schemas or custom include/exclude, add here
+            include_object=include_object,
         )
 
         with context.begin_transaction():

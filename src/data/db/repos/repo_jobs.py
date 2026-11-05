@@ -398,13 +398,13 @@ class JobsRepository:
         stmt = stmt.order_by(asc(ScheduleRun.scheduled_for)).limit(limit)
         return list(self.session.execute(stmt).scalars())
 
-    def get_runs_by_job(self, job_type: JobType, job_id: str) -> List[ScheduleRun]:
+    def get_runs_by_job(self, job_type: JobType, job_id: int) -> List[ScheduleRun]:
         """
         Get all runs for a specific job.
 
         Args:
             job_type: Job type
-            job_id: Job identifier string
+            job_id: Schedule id the runs belong to
 
         Returns:
             List of ScheduleRun objects

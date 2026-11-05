@@ -18,14 +18,17 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql.elements import conv
 
 from src.data.db.core.base import Base
 from src.data.db.core.json_types import JsonType
@@ -68,37 +71,55 @@ class Message(Base):
 
     __tablename__ = "msg_messages"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
-    message_type: Mapped[str] = mapped_column(String(50), index=True)
-    priority: Mapped[str] = mapped_column(String(20), default=MessagePriority.NORMAL.value)
-    channels: Mapped[list[str]] = mapped_column(ARRAY(String))
-    recipient_id: Mapped[str | None] = mapped_column(String(100), index=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    message_type: Mapped[str] = mapped_column(String(50))
+    priority: Mapped[str] = mapped_column(String(20), default=MessagePriority.NORMAL.value, server_default=text("'NORMAL'"))
+    channels: Mapped[list[str]] = mapped_column(ARRAY(Text))
+    recipient_id: Mapped[str | None] = mapped_column(String(100))
     template_name: Mapped[str | None] = mapped_column(String(100))
     content: Mapped[dict] = mapped_column(JsonType())
     message_metadata: Mapped[dict | None] = mapped_column("metadata", JsonType())
-    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now(), index=True)
-    scheduled_for: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now(), index=True)
-    status: Mapped[str] = mapped_column(String(20), default=MessageStatus.PENDING.value, index=True)
-    retry_count: Mapped[int] = mapped_column(Integer, default=0)
-    max_retries: Mapped[int] = mapped_column(Integer, default=3)
+    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now(), server_default=func.now())
+    scheduled_for: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now(), server_default=func.now())
+    status: Mapped[str] = mapped_column(String(20), default=MessageStatus.PENDING.value, server_default=text("'PENDING'"))
+    retry_count: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    max_retries: Mapped[int] = mapped_column(Integer, default=3, server_default=text("3"))
     last_error: Mapped[str | None] = mapped_column(Text)
     processed_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True))
 
     # Distributed processing lock fields
-    locked_by: Mapped[str | None] = mapped_column(String(100), index=True)
-    locked_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), index=True)
+    locked_by: Mapped[str | None] = mapped_column(String(100))
+    locked_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True))
 
     # Relationships
     delivery_statuses = relationship("MessageDeliveryStatus", back_populates="message", cascade="all, delete-orphan")
 
-    # Constraints
+    # Constraints and indexes exactly as in prod (conv() keeps a name verbatim instead of applying the naming convention)
     __table_args__ = (
-        CheckConstraint("priority IN ('LOW', 'NORMAL', 'HIGH', 'CRITICAL')", name="check_message_priority"),
+        CheckConstraint("priority IN ('LOW', 'NORMAL', 'HIGH', 'CRITICAL')", name=conv("msg_messages_priority_check")),
         CheckConstraint(
-            "status IN ('PENDING', 'PROCESSING', 'DELIVERED', 'FAILED', 'CANCELLED')", name="check_message_status"
+            "status IN ('PENDING', 'PROCESSING', 'DELIVERED', 'FAILED', 'CANCELLED')", name=conv("msg_messages_status_check")
         ),
-        CheckConstraint("retry_count >= 0", name="check_retry_count_positive"),
-        CheckConstraint("max_retries >= 0", name="check_max_retries_positive"),
+        CheckConstraint("retry_count >= 0", name=conv("msg_messages_retry_count_check")),
+        CheckConstraint("max_retries >= 0", name=conv("msg_messages_max_retries_check")),
+        Index("idx_msg_messages_created", "created_at"),
+        Index("idx_msg_messages_locked_at", "locked_at"),
+        Index("idx_msg_messages_locked_by", "locked_by"),
+        Index(
+            "idx_msg_messages_pending_poll", "status", "scheduled_for", "locked_by", "locked_at",
+            postgresql_where=text("status = 'PENDING'"),
+        ),
+        Index("idx_msg_messages_pending_priority", "status", "scheduled_for", "priority", postgresql_where=text("status = 'PENDING'")),
+        Index("idx_msg_messages_priority", "priority"),
+        Index("idx_msg_messages_recipient", "recipient_id"),
+        Index(
+            "idx_msg_messages_retry_eligible", "status", "retry_count", "max_retries", "processed_at",
+            postgresql_where=text("status = 'FAILED'"),
+        ),
+        Index("idx_msg_messages_scheduled", "scheduled_for"),
+        Index("idx_msg_messages_status", "status"),
+        Index("idx_msg_messages_type", "message_type"),
+        {"comment": "Notification messages queue with priority and retry support"},
     )
 
     def __repr__(self):
@@ -122,20 +143,24 @@ class MessageDeliveryStatus(Base):
 
     __tablename__ = "msg_delivery_status"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
-    message_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("msg_messages.id", ondelete="CASCADE"), index=True)
-    channel: Mapped[str] = mapped_column(String(50), index=True)
-    status: Mapped[str] = mapped_column(String(20), index=True)
-    delivered_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), index=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    message_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("msg_messages.id", ondelete="CASCADE", name=conv("msg_delivery_status_message_id_fkey"))
+    )
+    channel: Mapped[str] = mapped_column(String(50))
+    status: Mapped[str] = mapped_column(String(20))
+    delivered_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True))
     response_time_ms: Mapped[int | None] = mapped_column(Integer)
     error_message: Mapped[str | None] = mapped_column(Text)
     external_id: Mapped[str | None] = mapped_column(String(255))
-    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now())
+    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now(), server_default=func.now())
     # Bumped on every status change (including the raw-SQL claim UPDATE in
     # MessageRepository.claim_pending_deliveries). Lets a stale SENT row --
     # claimed by a consumer that then crashed before writing back
     # DELIVERED/FAILED -- be detected and reclaimed.
-    updated_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    updated_at: Mapped[dt] = mapped_column(
+        DateTime(timezone=True), default=func.now(), onupdate=func.now(), server_default=func.now()
+    )
 
     # Relationships
     message = relationship("Message", back_populates="delivery_statuses")
@@ -143,9 +168,15 @@ class MessageDeliveryStatus(Base):
     # Constraints
     __table_args__ = (
         CheckConstraint(
-            "status IN ('PENDING', 'SENT', 'DELIVERED', 'FAILED', 'BOUNCED')", name="check_delivery_status"
+            "status IN ('PENDING', 'SENT', 'DELIVERED', 'FAILED', 'BOUNCED')", name=conv("msg_delivery_status_status_check")
         ),
-        CheckConstraint("response_time_ms >= 0", name="check_response_time_positive"),
+        CheckConstraint("response_time_ms >= 0", name=conv("msg_delivery_status_response_time_ms_check")),
+        Index("idx_delivery_status_channel", "channel"),
+        Index("idx_delivery_status_composite", "message_id", "channel", "status"),
+        Index("idx_delivery_status_delivered", "delivered_at"),
+        Index("idx_delivery_status_message", "message_id"),
+        Index("idx_delivery_status_status", "status"),
+        {"comment": "Per-channel delivery status tracking for each message"},
     )
 
     def __repr__(self):
@@ -157,21 +188,28 @@ class RateLimit(Base):
 
     __tablename__ = "msg_rate_limits"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
-    user_id: Mapped[str] = mapped_column(String(100), index=True)
-    channel: Mapped[str] = mapped_column(String(50), index=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(100))
+    channel: Mapped[str] = mapped_column(String(50))
     tokens: Mapped[int] = mapped_column(Integer)
-    last_refill: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=func.now(), index=True)
+    # NOT NULL in prod; Optional on the Python side because refill_tokens() handles an unset value before flush
+    last_refill: Mapped[dt | None] = mapped_column(
+        DateTime(timezone=True), default=func.now(), server_default=func.now(), nullable=False
+    )
     max_tokens: Mapped[int] = mapped_column(Integer)
     refill_rate: Mapped[int] = mapped_column(Integer)
-    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now())
+    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now(), server_default=func.now())
 
     # Constraints
     __table_args__ = (
         UniqueConstraint("user_id", "channel", name="unique_user_channel_rate_limit"),
-        CheckConstraint("tokens >= 0", name="check_tokens_positive"),
-        CheckConstraint("max_tokens > 0", name="check_max_tokens_positive"),
-        CheckConstraint("refill_rate > 0", name="check_refill_rate_positive"),
+        CheckConstraint("tokens >= 0", name=conv("msg_rate_limits_tokens_check")),
+        CheckConstraint("max_tokens > 0", name=conv("msg_rate_limits_max_tokens_check")),
+        CheckConstraint("refill_rate > 0", name=conv("msg_rate_limits_refill_rate_check")),
+        Index("idx_rate_limits_channel", "channel"),
+        Index("idx_rate_limits_last_refill", "last_refill"),
+        Index("idx_rate_limits_user", "user_id"),
+        {"comment": "Per-user rate limiting configuration and state"},
     )
 
     def __repr__(self):
@@ -209,21 +247,27 @@ class ChannelConfig(Base):
 
     __tablename__ = "msg_channel_configs"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
-    channel: Mapped[str] = mapped_column(String(50), unique=True)
-    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    channel: Mapped[str] = mapped_column(String(50))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
     config: Mapped[dict] = mapped_column(JsonType())
-    rate_limit_per_minute: Mapped[int] = mapped_column(Integer, default=60)
-    max_retries: Mapped[int] = mapped_column(Integer, default=3)
-    timeout_seconds: Mapped[int] = mapped_column(Integer, default=30)
-    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now())
-    updated_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), index=True)
+    rate_limit_per_minute: Mapped[int] = mapped_column(Integer, default=60, server_default=text("60"))
+    max_retries: Mapped[int] = mapped_column(Integer, default=3, server_default=text("3"))
+    timeout_seconds: Mapped[int] = mapped_column(Integer, default=30, server_default=text("30"))
+    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now(), server_default=func.now())
+    updated_at: Mapped[dt] = mapped_column(
+        DateTime(timezone=True), default=func.now(), onupdate=func.now(), server_default=func.now()
+    )
 
     # Constraints
     __table_args__ = (
-        CheckConstraint("rate_limit_per_minute > 0", name="check_rate_limit_positive"),
-        CheckConstraint("max_retries >= 0", name="check_max_retries_positive"),
-        CheckConstraint("timeout_seconds > 0", name="check_timeout_positive"),
+        UniqueConstraint("channel", name=conv("msg_channel_configs_channel_key")),
+        CheckConstraint("rate_limit_per_minute > 0", name=conv("msg_channel_configs_rate_limit_per_minute_check")),
+        CheckConstraint("max_retries >= 0", name=conv("msg_channel_configs_max_retries_check")),
+        CheckConstraint("timeout_seconds > 0", name=conv("msg_channel_configs_timeout_seconds_check")),
+        Index("idx_channel_configs_enabled", "enabled"),
+        Index("idx_channel_configs_updated", "updated_at"),
+        {"comment": "Channel plugin configuration and settings"},
     )
 
     def __repr__(self):

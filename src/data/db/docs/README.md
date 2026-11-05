@@ -159,3 +159,25 @@ You can use either:
 * **No hidden sessions**: easier debugging & testing (you can inject a test session).
 * **Clean layering**: service code orchestrates; repos only do data access.
 
+---
+
+# Schema and migrations
+
+* **The ORM models describe the prod schema exactly** (verified 2026-11-05 against a
+  read-only report of the Pi's DB): index names, `DESC` and partial indexes, server
+  defaults, comments, CHECK / UNIQUE / FK names (`conv()` keeps legacy names verbatim
+  instead of applying the naming convention in `core/base.py`). Only primary-key
+  names are left to the convention; nothing references them.
+* **`alembic check` must report "No new upgrade operations detected"** against a DB at
+  head. Run it before writing a migration and after changing a model; anything it
+  lists is either a model bug or the migration you still have to write.
+* Not modeled on purpose (excluded in `migrations/env.py`, `UNMODELED_TABLES`):
+  `apscheduler_jobs` (APScheduler's job store). The four `v_*` views are not modeled
+  either. The unused legacy P04 table `ss_sentiment_history` was dropped in 016.
+* The chain cannot be replayed on an empty DB (the first revision is a diff against
+  pre-Alembic tables); tests build the schema with `create_all` + `alembic stamp head`.
+* Legacy column quirks the models keep: `job_schedules.state_json` is TEXT
+  (`JsonText` stores/reads JSON), several `updated_at` columns are timestamp
+  *without* time zone, legacy ids are `GENERATED ALWAYS` identities (never insert an
+  explicit id), `job_schedule_runs.job_id` is an integer FK to `job_schedules.id`
+  (NULL for ad-hoc API runs, whose label is in `job_snapshot["run_label"]`).

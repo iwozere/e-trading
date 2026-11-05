@@ -94,7 +94,7 @@ class ScheduleRunCreate(BaseModel):
     """Pydantic model for creating a run."""
 
     job_type: JobType
-    job_id: str | None = None
+    job_id: int | None = None  # schedule id (FK to job_schedules); None for ad-hoc runs
     scheduled_for: dt
     job_snapshot: Dict[str, Any] = Field(default_factory=dict)
 
@@ -129,7 +129,7 @@ class ScheduleRunResponse(BaseModel):
     @field_validator("job_id", mode="before")
     @classmethod
     def coerce_job_id_to_str(cls, v: Any) -> str | None:
-        """DB column is BigInteger; coerce to str until a migration converts it to VARCHAR."""
+        """The DB column is an integer schedule id; the API has always exposed it as a string."""
         if v is None:
             return None
         return str(v)

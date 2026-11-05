@@ -23,8 +23,10 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql.elements import conv
 
 from src.data.db.core.base import Base
 from src.data.db.core.json_types import JsonType
@@ -53,9 +55,9 @@ class ScreenerSnapshot(Base):
 
     __tablename__ = "ss_snapshot"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
-    ticker: Mapped[str] = mapped_column(String(10), index=True)
-    run_date: Mapped[date] = mapped_column(Date, index=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    ticker: Mapped[str] = mapped_column(String(10))
+    run_date: Mapped[date] = mapped_column(Date)
     short_interest_pct: Mapped[float | None] = mapped_column(Numeric(5, 4))
     days_to_cover: Mapped[float | None] = mapped_column(Numeric(8, 2))
     float_shares: Mapped[int | None] = mapped_column(BigInteger)
@@ -64,17 +66,20 @@ class ScreenerSnapshot(Base):
     screener_score: Mapped[float | None] = mapped_column(Numeric(5, 4))
     raw_payload: Mapped[dict | None] = mapped_column(JsonType())
     data_quality: Mapped[float | None] = mapped_column(Numeric(3, 2))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=func.now(), server_default=text("CURRENT_TIMESTAMP")
+    )
 
+    # Names exactly as in prod; conv() keeps a name verbatim instead of applying the naming convention
     __table_args__ = (
         Index("idx_ss_snapshot_ticker_date", "ticker", "run_date"),
-        Index("idx_ss_snapshot_run_date_desc", "run_date", postgresql_using="btree"),
-        Index("idx_ss_snapshot_screener_score_desc", "screener_score", "run_date", postgresql_using="btree"),
+        Index("idx_ss_snapshot_run_date_desc", text("run_date DESC")),
+        Index("idx_ss_snapshot_screener_score_desc", text("screener_score DESC"), text("run_date DESC")),
         Index("idx_ss_snapshot_created_at", "created_at"),
-        CheckConstraint("short_interest_pct >= 0 AND short_interest_pct <= 1", name="check_short_interest_pct"),
-        CheckConstraint("days_to_cover >= 0", name="check_days_to_cover"),
-        CheckConstraint("screener_score >= 0 AND screener_score <= 1", name="check_screener_score"),
-        CheckConstraint("data_quality >= 0 AND data_quality <= 1", name="check_data_quality"),
+        CheckConstraint("short_interest_pct >= 0 AND short_interest_pct <= 1", name=conv("ss_snapshot_short_interest_pct_check")),
+        CheckConstraint("days_to_cover >= 0", name=conv("ss_snapshot_days_to_cover_check")),
+        CheckConstraint("screener_score >= 0 AND screener_score <= 1", name=conv("ss_snapshot_screener_score_check")),
+        CheckConstraint("data_quality >= 0 AND data_quality <= 1", name=conv("ss_snapshot_data_quality_check")),
     )
 
     def __repr__(self):
@@ -108,10 +113,10 @@ class DeepScanMetrics(Base):
 
     __tablename__ = "ss_deep_metrics"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
-    ticker: Mapped[str] = mapped_column(String(10), index=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    ticker: Mapped[str] = mapped_column(String(10))
     # DateType alias: the column name "date" shadows datetime.date in this scope
-    date: Mapped[DateType] = mapped_column(Date, index=True)
+    date: Mapped[DateType] = mapped_column(Date)
     volume_spike: Mapped[float | None] = mapped_column(Numeric(6, 2))
     call_put_ratio: Mapped[float | None] = mapped_column(Numeric(6, 2))
     sentiment_24h: Mapped[float | None] = mapped_column(Numeric(4, 3))
@@ -119,54 +124,103 @@ class DeepScanMetrics(Base):
     squeeze_score: Mapped[float | None] = mapped_column(Numeric(5, 4))
     alert_level: Mapped[str | None] = mapped_column(String(10))
     raw_payload: Mapped[dict | None] = mapped_column(JsonType())
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=func.now(), server_default=text("CURRENT_TIMESTAMP")
+    )
 
     # Multi-source retail sentiment metrics (added by migration 001_add_sentiment_metrics.sql).
     # These columns existed in the DB before this ORM class mapped them -- _store_results() in
     # daily_deep_scan.py previously computed but never persisted them.
-    mentions_24h: Mapped[int | None] = mapped_column(Integer, default=0)
-    mentions_growth_7d: Mapped[float | None] = mapped_column(Numeric(8, 4))
-    # FLOAT in the DB (migration 001), not NUMERIC -- unsigned reach (Σengagement /
-    # sqrt(unique_authors+1)), unbounded above since the Rev 2 redefinition (spec §2.5.5).
-    virality_index: Mapped[float | None] = mapped_column(Float, default=0.0)
-    bot_pct: Mapped[float | None] = mapped_column(Numeric(4, 3), default=0.0)
-    sentiment_data_quality: Mapped[dict | None] = mapped_column(JsonType())
+    mentions_24h: Mapped[int | None] = mapped_column(
+        Integer, default=0, server_default=text("0"),
+        comment="Total mention count across all sentiment sources (StockTwits, Reddit, News, etc.) in the last 24 hours",
+    )
+    # FLOAT (double precision) in the DB, like virality_index and bot_pct (migration 001)
+    mentions_growth_7d: Mapped[float | None] = mapped_column(
+        Float,
+        comment="Percentage growth in mentions compared to 7-day historical average. NULL if no historical data available. "
+        "Formula: (current - avg_7d) / avg_7d",
+    )
+    # Unsigned reach (Σengagement / sqrt(unique_authors+1)), unbounded above since the Rev 2 redefinition (spec §2.5.5).
+    virality_index: Mapped[float | None] = mapped_column(
+        Float, default=0.0, server_default=text("0.0"),
+        comment="Unsigned reach: Σengagement / sqrt(unique_authors + 1). Unbounded above -- redefined from a 0..1 "
+        "sentiment-weighted score in Rev 2 (sentiment-spec-rev2.md §2.5.5); orthogonal to sentiment_24h's direction.",
+    )
+    bot_pct: Mapped[float | None] = mapped_column(
+        Float, default=0.0, server_default=text("0.0"),
+        comment="Estimated percentage of bot activity (0-1) based on account age, posting patterns, and content similarity. "
+        "Higher = more bot activity.",
+    )
+    sentiment_data_quality: Mapped[dict | None] = mapped_column(
+        JsonType(), server_default=text("'{}'::jsonb"),
+        comment='JSON object with per-provider status and metadata. Format: {"stocktwits": "ok", "reddit": "partial", '
+        '"news": "failed", "providers_count": 2}',
+    )
 
     # Tech-discourse signal class (Hacker News) -- reported separately from retail sentiment
     # above, never blended into it. See sentiment-spec-rev2.md §2.5.6. `tech_coverage_available`
     # distinguishes "ticker absent from the HN entity map" (False) from "covered but zero
     # mentions" (True, tech_mentions_24h=0) -- the other tech_* columns stay NULL, never 0.5,
     # when coverage is unavailable.
-    tech_mentions_24h: Mapped[int | None] = mapped_column(Integer)
-    tech_sentiment_score_24h: Mapped[float | None] = mapped_column(Numeric(4, 3))
-    tech_sentiment_24h: Mapped[float | None] = mapped_column(Numeric(4, 3))
-    tech_discussion_depth: Mapped[float | None] = mapped_column(Numeric(8, 2))
-    tech_coverage_available: Mapped[bool | None] = mapped_column(Boolean)
+    tech_mentions_24h: Mapped[int | None] = mapped_column(
+        Integer,
+        comment='Hacker News mentions in the last 24h for tickers covered by the entity map. NULL (not 0) when '
+        'tech_coverage_available is false -- distinguishes "no data" from "covered, zero mentions".',
+    )
+    tech_sentiment_score_24h: Mapped[float | None] = mapped_column(
+        Numeric(4, 3),
+        comment="Raw (-1..1) tech_discourse sentiment score. Engineering-reputation signal, structurally different from "
+        "retail sentiment_score_24h -- never blended with it. See sentiment-spec-rev2.md §2.5.6.",
+    )
+    tech_sentiment_24h: Mapped[float | None] = mapped_column(
+        Numeric(4, 3),
+        comment="Normalized (0..1) tech_discourse sentiment, mirroring sentiment_24h's normalization for retail. Independent "
+        "feature; add to squeeze_score only if a backtest justifies it (spec §2.5.6), not by default.",
+    )
+    tech_discussion_depth: Mapped[float | None] = mapped_column(
+        Numeric(8, 2),
+        comment="Mean comment count per Hacker News story that matched this ticker's entity map. NULL when "
+        "tech_coverage_available is false.",
+    )
+    tech_coverage_available: Mapped[bool | None] = mapped_column(
+        Boolean,
+        comment='Whether this ticker is present in the Hacker News entity map at all (entity/tickers.yml). False means '
+        '"no data" -- the other tech_* columns are then NULL, never a fabricated neutral reading.',
+    )
 
+    # Names exactly as in prod; conv() keeps a name verbatim instead of applying the naming convention
     __table_args__ = (
-        UniqueConstraint("ticker", "date", name="unique_ticker_date"),
+        UniqueConstraint("ticker", "date", name=conv("ss_deep_metrics_ticker_date_key")),
         Index("idx_ss_deep_metrics_ticker_date", "ticker", "date"),
-        Index("idx_ss_deep_metrics_date_desc", "date", postgresql_using="btree"),
-        Index("idx_ss_deep_metrics_squeeze_score_desc", "squeeze_score", "date", postgresql_using="btree"),
-        Index("idx_ss_deep_metrics_alert_level", "alert_level", "date", postgresql_using="btree"),
+        Index("idx_ss_deep_metrics_date_desc", text("date DESC")),
+        Index("idx_ss_deep_metrics_squeeze_score_desc", text("squeeze_score DESC"), text("date DESC")),
+        Index("idx_ss_deep_metrics_alert_level", "alert_level", text("date DESC")),
         Index("idx_ss_deep_metrics_created_at", "created_at"),
-        CheckConstraint("volume_spike >= 0", name="check_volume_spike"),
-        CheckConstraint("call_put_ratio >= 0", name="check_call_put_ratio"),
-        CheckConstraint("sentiment_24h >= -1 AND sentiment_24h <= 1", name="check_sentiment_24h"),
-        CheckConstraint("borrow_fee_pct >= 0", name="check_borrow_fee_pct"),
-        CheckConstraint("squeeze_score >= 0 AND squeeze_score <= 1", name="check_squeeze_score"),
-        CheckConstraint("alert_level IN ('LOW', 'MEDIUM', 'HIGH')", name="check_alert_level"),
-        CheckConstraint("tech_mentions_24h >= 0", name="check_tech_mentions_24h"),
-        CheckConstraint(
-            "tech_sentiment_score_24h >= -1 AND tech_sentiment_score_24h <= 1", name="check_tech_sentiment_score_24h"
+        Index("idx_ss_deep_metrics_mentions", text("mentions_24h DESC"), postgresql_where=text("mentions_24h > 0")),
+        Index(
+            "idx_ss_deep_metrics_mentions_growth", text("mentions_growth_7d DESC"),
+            postgresql_where=text("mentions_growth_7d IS NOT NULL"),
         ),
-        CheckConstraint("tech_sentiment_24h >= -1 AND tech_sentiment_24h <= 1", name="check_tech_sentiment_24h"),
-        CheckConstraint("tech_discussion_depth >= 0", name="check_tech_discussion_depth"),
-        CheckConstraint("mentions_24h >= 0", name="check_mentions_positive"),
+        Index("idx_ss_deep_metrics_sentiment24", "sentiment_24h"),
+        Index("idx_ss_deep_metrics_virality", text("virality_index DESC")),
+        CheckConstraint("volume_spike >= 0", name=conv("ss_deep_metrics_volume_spike_check")),
+        CheckConstraint("call_put_ratio >= 0", name=conv("ss_deep_metrics_call_put_ratio_check")),
+        CheckConstraint("sentiment_24h >= -1 AND sentiment_24h <= 1", name=conv("ss_deep_metrics_sentiment_24h_check")),
+        CheckConstraint("borrow_fee_pct >= 0", name=conv("ss_deep_metrics_borrow_fee_pct_check")),
+        CheckConstraint("squeeze_score >= 0 AND squeeze_score <= 1", name=conv("ss_deep_metrics_squeeze_score_check")),
+        CheckConstraint("alert_level IN ('LOW', 'MEDIUM', 'HIGH')", name=conv("ss_deep_metrics_alert_level_check")),
+        CheckConstraint("tech_mentions_24h >= 0", name=conv("check_tech_mentions_24h")),
+        CheckConstraint(
+            "tech_sentiment_score_24h >= -1 AND tech_sentiment_score_24h <= 1", name=conv("check_tech_sentiment_score_24h")
+        ),
+        CheckConstraint("tech_sentiment_24h >= -1 AND tech_sentiment_24h <= 1", name=conv("check_tech_sentiment_24h")),
+        CheckConstraint("tech_discussion_depth >= 0", name=conv("check_tech_discussion_depth")),
+        CheckConstraint("mentions_24h >= 0", name=conv("check_mentions_positive")),
         # virality_index is unsigned reach (Σengagement / sqrt(unique_authors+1)), unbounded
         # above, since the Rev 2 redefinition (sentiment-spec-rev2.md §2.5.5) -- was 0..1 pre-Rev2.
-        CheckConstraint("virality_index >= 0", name="check_virality_range"),
-        CheckConstraint("bot_pct >= 0 AND bot_pct <= 1", name="check_bot_pct_range"),
+        CheckConstraint("virality_index >= 0", name=conv("check_virality_range")),
+        CheckConstraint("bot_pct >= 0 AND bot_pct <= 1", name=conv("check_bot_pct_range")),
     )
 
     def __repr__(self):
@@ -207,7 +261,7 @@ class HnCorpusItem(Base):
 
     __tablename__ = "ss_hn_corpus"
 
-    item_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    item_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)  # Hacker News item id
     item_type: Mapped[str] = mapped_column(String(10))  # "story" | "comment" | "job" | "poll"
     parent_id: Mapped[int | None] = mapped_column(BigInteger)
     story_id: Mapped[int | None] = mapped_column(BigInteger)
@@ -215,13 +269,18 @@ class HnCorpusItem(Base):
     created_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     text_clean: Mapped[str | None] = mapped_column(Text)
     score: Mapped[int | None] = mapped_column(Integer)
-    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now(), server_default=func.now())
 
     __table_args__ = (
         Index("idx_ss_hn_corpus_created_utc", "created_utc"),
         Index("idx_ss_hn_corpus_story_id", "story_id"),
         Index("idx_ss_hn_corpus_fetched_at", "fetched_at"),
-        CheckConstraint("item_type IN ('story', 'comment', 'job', 'poll')", name="check_hn_item_type"),
+        CheckConstraint("item_type IN ('story', 'comment', 'job', 'poll')", name=conv("check_hn_item_type")),
+        {
+            "comment": "Shared Hacker News corpus cache (spec §2.4/§2.7). Populated once per batch run and entity-matched "
+            "against every ticker in-process -- cost is O(corpus size), independent of batch size. author_hash is "
+            "salted (spec §2.11); no raw HN usernames are stored."
+        },
     )
 
     def __repr__(self):
@@ -246,12 +305,20 @@ class SentimentCalibration(Base):
     mean_score: Mapped[float] = mapped_column(Numeric(10, 6))
     std_score: Mapped[float] = mapped_column(Numeric(10, 6))
     n_obs: Mapped[int] = mapped_column(Integer)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=func.now(), onupdate=func.now(), server_default=func.now()
+    )
 
     __table_args__ = (
         Index("idx_ss_sentiment_calibration_day", "day"),
-        CheckConstraint("n_obs >= 0", name="check_calibration_n_obs_nonneg"),
-        CheckConstraint("std_score >= 0", name="check_calibration_std_nonneg"),
+        CheckConstraint("n_obs >= 0", name=conv("check_calibration_n_obs_nonneg")),
+        CheckConstraint("std_score >= 0", name=conv("check_calibration_std_nonneg")),
+        {
+            "comment": "Per-source, per-day sentiment score distribution (spec §2.5.6). A trailing window (default 30 days) "
+            "of rows is pooled at read time into one (mean, std, n) used to z-score calibrate that provider's raw scores "
+            "before blending. Falls back to raw scores until n_obs across the window reaches min_observations "
+            "(default 200) -- see processing/calibration.py."
+        },
     )
 
     def __repr__(self):
@@ -263,23 +330,26 @@ class SqueezeAlert(Base):
 
     __tablename__ = "ss_alerts"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
-    ticker: Mapped[str] = mapped_column(String(10), index=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    ticker: Mapped[str] = mapped_column(String(10))
     alert_level: Mapped[str] = mapped_column(String(10))
     reason: Mapped[str | None] = mapped_column(Text)
     squeeze_score: Mapped[float | None] = mapped_column(Numeric(5, 4))
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
-    sent: Mapped[bool] = mapped_column(Boolean, default=False)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=func.now(), server_default=text("CURRENT_TIMESTAMP")
+    )
+    sent: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     cooldown_expires: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     notification_id: Mapped[str | None] = mapped_column(String(50))
 
+    # Names exactly as in prod; conv() keeps a name verbatim instead of applying the naming convention
     __table_args__ = (
         Index("idx_ss_alerts_ticker_cooldown", "ticker", "cooldown_expires"),
-        Index("idx_ss_alerts_timestamp_desc", "timestamp", postgresql_using="btree"),
-        Index("idx_ss_alerts_alert_level_timestamp", "alert_level", "timestamp", postgresql_using="btree"),
-        Index("idx_ss_alerts_sent_timestamp", "sent", "timestamp", postgresql_using="btree"),
-        CheckConstraint("alert_level IN ('LOW', 'MEDIUM', 'HIGH')", name="check_alert_level"),
-        CheckConstraint("squeeze_score >= 0 AND squeeze_score <= 1", name="check_squeeze_score"),
+        Index("idx_ss_alerts_timestamp_desc", text('"timestamp" DESC')),
+        Index("idx_ss_alerts_alert_level_timestamp", "alert_level", text('"timestamp" DESC')),
+        Index("idx_ss_alerts_sent_timestamp", "sent", text('"timestamp" DESC')),
+        CheckConstraint("alert_level IN ('LOW', 'MEDIUM', 'HIGH')", name=conv("ss_alerts_alert_level_check")),
+        CheckConstraint("squeeze_score >= 0 AND squeeze_score <= 1", name=conv("ss_alerts_squeeze_score_check")),
     )
 
     def __repr__(self):
@@ -307,16 +377,18 @@ class AdHocCandidateModel(Base):
 
     __tablename__ = "ss_ad_hoc_candidates"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
-    ticker: Mapped[str] = mapped_column(String(10), unique=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    ticker: Mapped[str] = mapped_column(String(10))
     reason: Mapped[str | None] = mapped_column(Text)
-    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+    first_seen: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=func.now(), server_default=text("CURRENT_TIMESTAMP")
+    )
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    active: Mapped[bool] = mapped_column(Boolean, default=True)
-    promoted_by_screener: Mapped[bool] = mapped_column(Boolean, default=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+    promoted_by_screener: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
 
     __table_args__ = (
-        UniqueConstraint("ticker", name="unique_ticker"),
+        UniqueConstraint("ticker", name=conv("ss_ad_hoc_candidates_ticker_key")),
         Index("idx_ss_adhoc_active", "active", "expires_at"),
         Index("idx_ss_adhoc_expires_at", "expires_at"),
         Index("idx_ss_adhoc_promoted", "promoted_by_screener", "active"),

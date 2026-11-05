@@ -37,9 +37,11 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql.elements import conv
 
 from src.data.db.core.base import Base
 from src.data.db.core.json_types import JsonType
@@ -80,7 +82,7 @@ class P22CompanyAlias(Base):
     company_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("p22_company.company_id"), nullable=False)
     alias: Mapped[str] = mapped_column(Text, nullable=False)
     source: Mapped[str] = mapped_column(Text, nullable=False)
-    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
     known_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (
@@ -102,7 +104,7 @@ class P22FinancialFact(Base):
     company_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("p22_company.company_id"), nullable=False)
     metric: Mapped[str] = mapped_column(Text, nullable=False)
     value: Mapped[float | None] = mapped_column(Numeric)
-    unit: Mapped[str] = mapped_column(Text, nullable=False, default="USD")
+    unit: Mapped[str] = mapped_column(Text, nullable=False, default="USD", server_default=text("'USD'"))
     period_end: Mapped[date | None] = mapped_column(Date)
     valid_from: Mapped[date | None] = mapped_column(Date)
     valid_to: Mapped[date | None] = mapped_column(Date)
@@ -256,7 +258,7 @@ class P22CorporateProcessEvent(Base):
     __tablename__ = "p22_corporate_process_event"
 
     event_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    company_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("p22_company.company_id"), nullable=False)
+    company_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("p22_company.company_id", name=conv("fk_p22_process_event_company_id_p22_company")), nullable=False)
     event_date: Mapped[date] = mapped_column(Date, nullable=False)
     state: Mapped[str] = mapped_column(Text, nullable=False)
     scope: Mapped[str | None] = mapped_column(Text)
@@ -264,7 +266,7 @@ class P22CorporateProcessEvent(Base):
     advisor_name: Mapped[str | None] = mapped_column(Text)
     accession_no: Mapped[str | None] = mapped_column(Text)
     matched_phrase: Mapped[str | None] = mapped_column(Text)
-    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
     known_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     source_url: Mapped[str | None] = mapped_column(Text)
 
@@ -330,16 +332,16 @@ class P22PartnershipStructure(Base):
     __tablename__ = "p22_partnership_structure"
 
     structure_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    company_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("p22_company.company_id"), nullable=False)
-    partner_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("p22_company.company_id"))
-    asset_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("p22_asset.asset_id"))
+    company_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("p22_company.company_id", name=conv("fk_p22_partnership_company_id_p22_company")), nullable=False)
+    partner_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("p22_company.company_id", name=conv("fk_p22_partnership_partner_id_p22_company")))
+    asset_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("p22_asset.asset_id", name=conv("fk_p22_partnership_asset_id_p22_asset")))
     structure_type: Mapped[str] = mapped_column(Text, nullable=False)
     partner_equity_pct: Mapped[float | None] = mapped_column(Numeric)
     agreement_date: Mapped[date | None] = mapped_column(Date)
     option_trigger: Mapped[str | None] = mapped_column(Text)
     is_redacted: Mapped[bool | None] = mapped_column(Boolean)
     entry_method: Mapped[str] = mapped_column(Text, nullable=False)
-    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
     known_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     source_url: Mapped[str | None] = mapped_column(Text)
 
@@ -399,7 +401,7 @@ class P22CorporateAction(Base):
     cash_amount: Mapped[float | None] = mapped_column(Numeric)
     new_ticker: Mapped[str | None] = mapped_column(Text)
     source: Mapped[str] = mapped_column(Text, nullable=False)  # 'sec_8k'|'fmp'|'yfinance'|'ibkr'|'manual'
-    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
     known_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     source_url: Mapped[str | None] = mapped_column(Text)
 
@@ -477,8 +479,8 @@ class P22ReviewItem(Base):
     item_type: Mapped[str] = mapped_column(Text, nullable=False)
     payload: Mapped[dict] = mapped_column(JsonType, nullable=False)
     evidence_url: Mapped[str | None] = mapped_column(Text)
-    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="pending", server_default=text("'pending'"))
     reviewed_by: Mapped[str | None] = mapped_column(Text)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     note: Mapped[str | None] = mapped_column(Text)
@@ -519,7 +521,7 @@ class P22FetchFailure(Base):
     url: Mapped[str | None] = mapped_column(Text)
     attempted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     error_message: Mapped[str | None] = mapped_column(Text)
-    resolved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    resolved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
 
     __table_args__ = (
         Index("idx_p22_fetch_failure_source", "source"),

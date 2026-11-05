@@ -26,6 +26,15 @@ from src.data.db.models.model_jobs import (
 from src.data.db.services.jobs_service import JobsService
 
 
+def _schedule_id(service: JobsService, n: int) -> int:
+    """Create a schedule and return its id: a run's job_id is a FK to job_schedules.id."""
+    schedule = service.create_schedule(
+        user_id=1,
+        schedule_data=ScheduleCreate(name=f"run_test_{n}", job_type=JobType.SCREENER, target="AAPL", cron="0 9 * * *"),
+    )
+    return schedule.id
+
+
 class TestJobsServiceSchedules:
     """Tests for schedule operations."""
 
@@ -249,7 +258,7 @@ class TestJobsServiceRuns:
 
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
-            job_id=str(12345),
+            job_id=_schedule_id(service, 12345),
             scheduled_for=datetime.now(UTC),
             job_snapshot={"test": "data"},
         )
@@ -269,7 +278,7 @@ class TestJobsServiceRuns:
         # Create a run
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
-            job_id=str(123),
+            job_id=_schedule_id(service, 123),
             scheduled_for=datetime.now(UTC),
             job_snapshot={"test": "data"},
         )
@@ -289,7 +298,7 @@ class TestJobsServiceRuns:
         for i in range(3):
             run_data = ScheduleRunCreate(
                 job_type=JobType.SCREENER,
-                job_id=str(100 + i),
+                job_id=_schedule_id(service, 100 + i),
                 scheduled_for=datetime.now(UTC),
                 job_snapshot={"test": i},
             )
@@ -306,7 +315,7 @@ class TestJobsServiceRuns:
         # Create a run
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
-            job_id=str(123),
+            job_id=_schedule_id(service, 123),
             scheduled_for=datetime.now(UTC),
             job_snapshot={"test": "data"},
         )
@@ -327,7 +336,7 @@ class TestJobsServiceRuns:
         # Create a pending run - must set status explicitly since service doesn't
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
-            job_id=str(200),
+            job_id=_schedule_id(service, 200),
             scheduled_for=datetime.now(UTC),
             job_snapshot={"test": "data"},
         )
@@ -353,7 +362,7 @@ class TestJobsServiceRuns:
         # Create and claim a run
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
-            job_id=str(201),
+            job_id=_schedule_id(service, 201),
             scheduled_for=datetime.now(UTC),
             job_snapshot={"test": "data"},
         )
@@ -374,7 +383,7 @@ class TestJobsServiceRuns:
         for i in range(3):
             run_data = ScheduleRunCreate(
                 job_type=JobType.SCREENER,
-                job_id=str(300 + i),
+                job_id=_schedule_id(service, 300 + i),
                 scheduled_for=datetime.now(UTC),
                 job_snapshot={"test": i},
             )
@@ -398,7 +407,7 @@ class TestJobsServiceRuns:
         # Create a pending run
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
-            job_id=str(400),
+            job_id=_schedule_id(service, 400),
             scheduled_for=datetime.now(UTC),
             job_snapshot={"test": "data"},
         )
@@ -426,7 +435,7 @@ class TestJobsServiceRuns:
         # Create and claim a run
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
-            job_id=str(401),
+            job_id=_schedule_id(service, 401),
             scheduled_for=datetime.now(UTC),
             job_snapshot={"test": "data"},
         )
@@ -526,7 +535,8 @@ class TestJobsServiceScreener:
         assert run.job_snapshot is not None
 
         assert run.job_type == JobType.SCREENER.value
-        assert "sp500" in str(run.job_id)
+        assert run.job_id is None  # ad-hoc run: no schedule
+        assert "sp500" in run.job_snapshot["run_label"]
         assert run.job_snapshot["screener_set"] == "sp500"
         assert len(run.job_snapshot["tickers"]) > 0
 
@@ -564,7 +574,8 @@ class TestJobsServiceReport:
         assert run.job_snapshot is not None
 
         assert run.job_type == JobType.REPORT.value
-        assert "weekly_summary" in str(run.job_id)
+        assert run.job_id is None  # ad-hoc run: no schedule
+        assert "weekly_summary" in run.job_snapshot["run_label"]
         assert run.job_snapshot["report_type"] == "weekly_summary"
         assert run.job_snapshot["parameters"]["start_date"] == "2025-01-01"
 
@@ -577,10 +588,11 @@ class TestJobsServiceStatistics:
         service = JobsService(db_service=mock_database_service)
 
         # Create some runs with different statuses
+        schedule_id = _schedule_id(service, 500)
         for status in [RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.PENDING]:
             run_data = ScheduleRunCreate(
                 job_type=JobType.SCREENER,
-                job_id=str(500),
+                job_id=schedule_id,
                 scheduled_for=datetime.now(UTC),
                 job_snapshot={"status": status.value},
             )
@@ -606,7 +618,7 @@ class TestJobsServiceStatistics:
         old_time = datetime.now(UTC) - timedelta(days=100)
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
-            job_id=str(600),
+            job_id=_schedule_id(service, 600),
             scheduled_for=old_time,
             job_snapshot={"test": "old"},
         )

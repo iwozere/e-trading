@@ -2,8 +2,41 @@
 JSON type handling for SQLAlchemy models.
 """
 
+import json
+from typing import Any
+
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.types import JSON, TypeDecorator
+from sqlalchemy.types import JSON, Text, TypeDecorator
+
+from src.notification.logger import setup_logger
+
+_logger = setup_logger(__name__)
+
+
+class JsonText(TypeDecorator):
+    """
+    JSON stored in a TEXT column (legacy columns such as job_schedules.state_json).
+
+    Writes dicts/lists as JSON text (strings are stored as given, assumed to be JSON already)
+    and always reads back the parsed value, so callers see the same shape as a JSONB column.
+    """
+
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value: Any, dialect: Any) -> str | None:
+        if value is None or isinstance(value, str):
+            return value
+        return json.dumps(value, ensure_ascii=False, default=str)
+
+    def process_result_value(self, value: Any, dialect: Any) -> Any:
+        if value is None or not isinstance(value, str):
+            return value
+        try:
+            return json.loads(value)
+        except ValueError:
+            _logger.warning("JsonText column holds invalid JSON (%d chars); returning {}", len(value))
+            return {}
 
 
 class JsonType(TypeDecorator):
