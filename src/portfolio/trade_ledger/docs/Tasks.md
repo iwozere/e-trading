@@ -13,7 +13,9 @@
 - [x] Add **Open Positions** section (Options: Summary only, no Lot; Select All) to
       `My Trades` and re-download the 7 backfill years (dev + Pi) — gives
       year-end reconciliation checkpoints for the whole history (see Design).
-- [ ] Check Flex Web Service token expiry date.
+- [x] Check Flex Web Service token expiry date: valid 2026-08-12 → **2027-07-14 13:09 EDT**.
+      Renew before then (Client Portal → Performance & Reports → Flex Queries → Flex Web Service
+      Configuration gear); update the token on dev and in the Pi `.env` (pnl_alert + trade_ledger use it).
 
 ### 🚀 PLANNED (implementation order)
 1. [x] `flex_downloader`: extract public `download_flex_statement(token, query_id) -> bytes`
