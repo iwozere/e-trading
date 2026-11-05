@@ -22,6 +22,11 @@ Each CSV row's `action` is `deal`, `link`, `reject` or blank (skip). `deal` rows
 `link` row with a blank `link_deal_id` can attach to a deal entered earlier in the same file. Import is
 all-or-nothing: any invalid row aborts the whole file before anything is committed.
 
+Drafted spreadsheet (spec §2.5 step 2 — entry columns read from the filings, then hand-verified):
+    ... deal_entry_cli prefill deals.csv [--limit 20] [--company-id N]
+    ... (review every row; `action` is blank where a human must decide — see `prefill_confidence`)
+    ... deal_entry_cli import deals.csv --reviewer NAME --dry-run
+
 Historical candidates (the daily job only scans the last week):
     ... deal_entry_cli scan --start 2010-01-01 --end 2026-10-29
 
@@ -35,6 +40,7 @@ import argparse
 import csv
 import json
 import sys
+from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -43,6 +49,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.services.database_service import DatabaseService
+from src.ml.pipeline.p22_biotech_ma.ingest.acquirer_config import load_acquirers
+from src.ml.pipeline.p22_biotech_ma.ingest.activist_positions import parse_source_url
 from src.ml.pipeline.p22_biotech_ma.ingest.deal_candidates import run as run_deal_candidates
 from src.ml.pipeline.p22_biotech_ma.ingest.deal_coverage import CLASSIFICATIONS, classify, latest_candidates
 from src.ml.pipeline.p22_biotech_ma.ingest.deal_entry import (
@@ -56,6 +64,7 @@ from src.ml.pipeline.p22_biotech_ma.ingest.deal_entry import (
     parse_bool,
     record_deal,
 )
+from src.ml.pipeline.p22_biotech_ma.ingest.deal_prefill import PREFILL_COLUMNS, cluster_filings, filing_text, prefill_cluster
 from src.ml.pipeline.p22_biotech_ma.ingest.review_queue import reject_item
 from src.ml.pipeline.p22_biotech_ma.ingest.universe_snapshot import all_landed_quarters
 from src.notification.logger import setup_logger
@@ -175,30 +184,95 @@ def _cmd_reject(args: argparse.Namespace) -> int:
     return 0
 
 
+def _candidate_rows(uow: Any) -> List[Dict[str, Any]]:
+    """Pending deal candidates as export rows (`CANDIDATE_COLUMNS`), by company, filed date, item id."""
+    items = uow.p22.get_pending_review_items(item_type="deal_candidate")
+    companies = _company_labels(uow)
+    items.sort(key=lambda i: (i["payload"]["company_id"], i["payload"].get("filed_date") or "", i["item_id"]))
+    rows = []
+    for item in items:
+        payload = item["payload"]
+        company = companies.get(payload["company_id"], {})
+        rows.append({
+            "item_id": item["item_id"],
+            "company_id": payload["company_id"],
+            "ticker": company.get("ticker") or "",
+            "company_name": company.get("name") or "",
+            "form_type": payload.get("form_type"),
+            "filed_date": payload.get("filed_date"),
+            "accession_no": payload.get("accession_no"),
+            "names_in_filing": " | ".join(payload.get("all_names_in_filing") or []),
+            "evidence_url": item.get("evidence_url") or "",
+        })
+    return rows
+
+
+def _write_rows(path: str, rows: List[Dict[str, Any]], extra_columns: Optional[List[str]] = None) -> None:
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=CANDIDATE_COLUMNS + ENTRY_COLUMNS + (extra_columns or []))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def _cmd_export(args: argparse.Namespace) -> int:
     with DatabaseService().uow() as uow:
-        items = uow.p22.get_pending_review_items(item_type="deal_candidate")
-        companies = _company_labels(uow)
-    items.sort(key=lambda i: (i["payload"]["company_id"], i["payload"].get("filed_date") or "", i["item_id"]))
-    with open(args.path, "w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=CANDIDATE_COLUMNS + ENTRY_COLUMNS)
-        writer.writeheader()
-        for item in items:
-            payload = item["payload"]
-            company = companies.get(payload["company_id"], {})
-            writer.writerow({
-                "item_id": item["item_id"],
-                "company_id": payload["company_id"],
-                "ticker": company.get("ticker") or "",
-                "company_name": company.get("name") or "",
-                "form_type": payload.get("form_type"),
-                "filed_date": payload.get("filed_date"),
-                "accession_no": payload.get("accession_no"),
-                "names_in_filing": " | ".join(payload.get("all_names_in_filing") or []),
-                "evidence_url": item.get("evidence_url") or "",
-            })
-    _logger.info("Exported %d pending candidates to %s", len(items), args.path)
+        rows = _candidate_rows(uow)
+    _write_rows(args.path, rows)
+    _logger.info("Exported %d pending candidates to %s", len(rows), args.path)
     _logger.info("deal_type: %s; status: %s; fractions as 0.45 or 45%%", ", ".join(DEAL_TYPES), ", ".join(DEAL_STATUSES))
+    return 0
+
+
+def _cmd_prefill(args: argparse.Namespace) -> int:
+    """Export pending candidates with draft entry columns read from the filings (`ingest/deal_prefill.py`)."""
+    from src.data.downloader.edgar_downloader import EdgarDownloader
+
+    with DatabaseService().uow() as uow:
+        rows = _candidate_rows(uow)
+        deals_by_target: Dict[int, List[Dict[str, Any]]] = {}
+        for deal in uow.p22.list_deals():
+            deals_by_target.setdefault(int(deal["target_id"]), []).append(deal)
+    if args.company_id is not None:
+        rows = [r for r in rows if int(r["company_id"]) == args.company_id]
+    clusters = cluster_filings(rows)
+    if args.limit is not None:
+        clusters = clusters[:args.limit]
+
+    edgar = EdgarDownloader()
+    roster = {a.name: a.cik for a in load_acquirers()}
+    cache: Dict[str, Optional[str]] = {}
+
+    def fetch_text(row: Dict[str, Any]) -> Optional[str]:
+        url = str(row.get("evidence_url") or "")
+        if url not in cache:
+            parsed = parse_source_url(url)
+            document = edgar.fetch_filing_document(*parsed) if parsed else None
+            cache[url] = filing_text(document) if document else None
+        return cache[url]
+
+    def context_fn(company_id: int, entry: Any) -> Any:
+        with DatabaseService().uow() as uow:
+            return gather_context(uow.p22, company_id, entry)
+
+    out: List[Dict[str, Any]] = []
+    by_confidence: Counter[str] = Counter()
+    for index, cluster in enumerate(clusters, start=1):
+        drafted = prefill_cluster(
+            cluster, fetch_text, roster=roster, context_fn=context_fn,
+            existing_deals=deals_by_target.get(int(cluster[0]["company_id"])), cluster_id=index,
+        )
+        by_confidence[str(drafted[0].get("prefill_confidence") or "none")] += 1
+        out.extend(drafted)
+        cache.clear()
+        if index % 25 == 0:
+            _logger.info("Prefilled %d/%d deals", index, len(clusters))
+
+    _write_rows(args.path, out, PREFILL_COLUMNS)
+    _logger.info(
+        "Wrote %d rows (%d deals) to %s — deals by confidence: %s; row actions: %s",
+        len(out), len(clusters), args.path, dict(by_confidence), dict(Counter(r.get("action") or "blank" for r in out)),
+    )
+    _logger.info("Review every row before `import --dry-run`: action is blank where a human must decide")
     return 0
 
 
@@ -387,6 +461,12 @@ def build_parser() -> argparse.ArgumentParser:
     export = sub.add_parser("export", help="Write pending candidates to a CSV for spreadsheet review")
     export.add_argument("path")
     export.set_defaults(func=_cmd_export)
+
+    prefill = sub.add_parser("prefill", help="Like export, with entry columns drafted from the filings (review before import)")
+    prefill.add_argument("path")
+    prefill.add_argument("--limit", type=int, default=None, help="Only the first N deals (a trial run)")
+    prefill.add_argument("--company-id", dest="company_id", type=int, default=None, help="Only this company")
+    prefill.set_defaults(func=_cmd_prefill)
 
     imp = sub.add_parser("import", help="Apply a reviewed CSV (all-or-nothing)")
     imp.add_argument("path")

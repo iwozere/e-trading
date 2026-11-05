@@ -883,6 +883,22 @@ use in the code/config; this section exists so they're all in one place to walk 
   not attributed (MacroGenics/ImmunoGen, Akari/Celsus); GENETIC-type interventions (gene therapy)
   are not asset candidates; the raw zone names payloads by content hash, so two companies with
   byte-identical hit lists share one manifest.
+- **ADDED 2026-11-05: deal-label pre-fill (`deal_entry_cli prefill`).** 2,699 pending deal candidates
+  (684 companies) would otherwise be typed in by hand from blank `export` columns. `ingest/deal_prefill.py`
+  does spec §2.5 step 2 (parse) so the reviewer only does step 3 (hand-verify): filings are grouped into
+  deals per company (new deal after a 365-day gap; first filing = `deal` row, the rest = `link`), the first
+  and last filing are read for merger-agreement date, defined parties (`X ("Parent")`, legal-entity names
+  only), cash price (most specific wording first, so CVR amounts and earlier proposals lose), CVR terms,
+  the subject holders' post-merger stake (<50% → `reverse_merger`, ≥50% → `reject`, company is the buyer)
+  and an "On <date> ... completed the Merger" closing date. PE / cash-shell buyer lists map to
+  `pe_take_private` / `shell_transaction`. `gather_context` then computes premiums and reverse-merger
+  flags; `action` stays blank (`prefill_confidence` low / check_price / flags) unless every required field
+  was found and nothing fired. Smoke-tested on 4 real filings (Salix/Valeant $173, Allos/Spectrum $1.82 +
+  CVR, Chembio/Biosynex $0.45, TherapeuticsMD/Athene $10 + CVR). Not yet run on prod data.
+- **FIXED 2026-11-05: entity-match queue re-asked reviewed aliases daily.** `run_alias_matching` only
+  suppressed pairs with a PENDING item, and `match_alias` never reads `p22_company_alias`, so confirmed and
+  rejected fuzzy aliases came back every run; 3,941 pending items covered 55 distinct pairs (most from
+  2026-09-02..04, before pending-suppression existed). Now `queued_alias_keys` counts every status.
 - **ADDED 2026-11-04: process-events backfill.** `p22_corporate_process_event` was empty on prod: the
   job only ever scans yesterday's 8-K index, so nothing before late Oct 2026 was scanned and days whose
   run was missed are never picked up. `run_process_events_ingest.py --start YYYY-MM-DD [--end ...]` scans

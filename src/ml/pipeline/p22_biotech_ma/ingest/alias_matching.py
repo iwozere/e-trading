@@ -95,6 +95,21 @@ def match_alias(candidate_name: str, known_companies: Dict[int, str]) -> MatchRe
     return MatchResult(candidate_name, "none", None, None, best_score if best_company_id is not None else None)
 
 
+def queued_alias_keys(review_items: List[Dict[str, Any]]) -> FrozenSet[Tuple[str, int, str]]:
+    """
+    `(candidate_name, matched_company_id, source)` for every `fuzzy_alias_candidate` item, whatever
+    its status — the `already_queued` argument of `resolve_aliases`.
+
+    Args:
+        review_items: `entity_match` review items in any status (`get_review_items`).
+    """
+    return frozenset(
+        (item["payload"]["candidate_name"], item["payload"]["matched_company_id"], item["payload"]["source"])
+        for item in review_items
+        if item["payload"].get("reason") == "fuzzy_alias_candidate"
+    )
+
+
 def resolve_aliases(
     candidates: List[Tuple[str, datetime]],
     known_companies: Dict[int, str],
@@ -132,19 +147,17 @@ def resolve_aliases(
         repo: A `P22Repo`-shaped object (duck-typed for test doubles).
         source: Tag recorded on the alias/review item (e.g. `'clinicaltrials'`, `'openfda'`).
         already_queued: `(candidate_name, matched_company_id, source)` triples
-            that already have a PENDING `fuzzy_alias_candidate` review item
-            (typically built by the caller from `get_pending_review_items`
-            before calling this). A fuzzy match landing on one of these is
-            counted (`fuzzy_already_queued`) but not re-queued. This job runs
-            daily and re-extracts the full current snapshot every time, so
-            without this, a sponsor string that keeps failing to resolve
-            would get a brand-new review-queue row every single business day
-            forever, burying genuinely new candidates under an
-            ever-growing pile of repeats of ones a human just hasn't reviewed
-            yet. Deliberately scoped to *pending* items only — a previously
-            rejected candidate is not suppressed, since whether "already
-            rejected" should also mean "never ask again" is a judgment call,
-            not a mechanical dedup, and it's left to the review queue itself.
+            that already have a `fuzzy_alias_candidate` review item in ANY
+            status (built by the caller with `queued_alias_keys`). A fuzzy
+            match landing on one of these is counted (`fuzzy_already_queued`)
+            but not re-queued. This job runs daily and re-extracts the full
+            current snapshot every time, so without this a sponsor string
+            would get a brand-new review-queue row every business day forever.
+            Confirmed and rejected items count too (changed 2026-11-05):
+            `match_alias` never consults `p22_company_alias`, so a confirmed
+            fuzzy alias is still a fuzzy match on the next run, and a rejected
+            one would be asked again daily — pending-only suppression let
+            3,941 items pile up for 55 distinct pairs.
 
     Returns:
         Counters: `deterministic`, `fuzzy_flagged`, `fuzzy_already_queued`, `unresolved`.

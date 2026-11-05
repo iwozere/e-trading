@@ -26,6 +26,7 @@ from src.ml.pipeline.p22_biotech_ma.ingest import raw_zone
 from src.ml.pipeline.p22_biotech_ma.ingest.alias_matching import (
     extract_ctgov_sponsor_names,
     extract_openfda_sponsor_names,
+    queued_alias_keys,
     resolve_aliases,
 )
 from src.ml.pipeline.p22_biotech_ma.ingest.review_queue import queue_depth_report
@@ -55,16 +56,11 @@ def run() -> dict:
             return {"clinicaltrials": {}, "openfda": {}}
 
         # This job runs daily and re-extracts the FULL current CT.gov/openFDA
-        # snapshot every time, not just what changed — so a still-unresolved
-        # fuzzy candidate must be checked against what's already sitting in
-        # the queue, or it gets a brand-new review item every single run
+        # snapshot every time, not just what changed — so a fuzzy candidate
+        # must be checked against every review item it already has, in any
+        # status, or it gets a brand-new review item every single run
         # (see alias_matching.resolve_aliases's `already_queued` docstring).
-        already_pending = uow.p22.get_pending_review_items(item_type="entity_match")
-        already_queued = frozenset(
-            (item["payload"]["candidate_name"], item["payload"]["matched_company_id"], item["payload"]["source"])
-            for item in already_pending
-            if item["payload"].get("reason") == "fuzzy_alias_candidate"
-        )
+        already_queued = queued_alias_keys(uow.p22.get_review_items(item_type="entity_match"))
 
         ctgov_candidates: list[tuple[str, datetime]] = []
         for studies, manifest in raw_zone.read_latest_partition_with_manifest("clinicaltrials_studies"):

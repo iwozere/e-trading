@@ -13,6 +13,7 @@ from src.ml.pipeline.p22_biotech_ma.ingest.alias_matching import (
     extract_ctgov_sponsor_names,
     extract_openfda_sponsor_names,
     match_alias,
+    queued_alias_keys,
     resolve_aliases,
 )
 
@@ -134,6 +135,23 @@ def test_resolve_aliases_already_queued_is_scoped_by_source():
 
     repo.add_review_item.assert_called_once()
     assert counts["fuzzy_flagged"] == 1
+
+
+def test_queued_alias_keys_includes_every_status():
+    """Confirmed and rejected pairs must suppress re-queuing too — match_alias never reads
+    p22_company_alias, so pending-only suppression re-asked them every day (2026-11-05)."""
+    def item(name, status, reason="fuzzy_alias_candidate"):
+        return {"status": status, "payload": {
+            "reason": reason, "candidate_name": name, "matched_company_id": 1, "source": "clinicaltrials"}}
+
+    keys = queued_alias_keys([
+        item("A Inc", "pending"), item("B Inc", "confirmed"), item("C Inc", "rejected"),
+        item("D Inc", "pending", reason="spac_name_heuristic"),
+    ])
+
+    assert keys == frozenset({
+        ("A Inc", 1, "clinicaltrials"), ("B Inc", 1, "clinicaltrials"), ("C Inc", 1, "clinicaltrials"),
+    })
 
 
 def test_extract_ctgov_sponsor_names_pulls_lead_sponsor_name():
