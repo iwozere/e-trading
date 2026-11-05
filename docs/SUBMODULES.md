@@ -187,8 +187,10 @@ jobs on their cron expressions, records `ScheduleRun` rows with status / error /
 | `deployment/` | Systemd unit file templates |
 
 ### Database Tables
-- `schedules` — job definitions (name, cron, target, enabled, next_run_at).
-- `schedule_runs` — execution history (started_at, finished_at, status, error, job_snapshot).
+- `job_schedules` — job definitions (name, cron, target, enabled, next_run_at).
+- `job_schedule_runs` — execution history (started_at, finished_at, status, error, job_snapshot).
+  `job_id` is an integer FK to `job_schedules.id`; ad-hoc runs started from the API have
+  `job_id` NULL and carry their label in `job_snapshot["run_label"]`.
 
 ### Monitoring Integration
 `monitoring_routes.py` joins `Schedule` + `ScheduleRun` and exposes them on
@@ -232,6 +234,10 @@ All downloaders implement the `BaseDataDownloader` interface with `get_ohlcv(sym
 - **Services** (`services/`): Business-logic wrappers; `DatabaseService` provides
   `uow()` context manager (Unit of Work).
 - **Core** (`core/base.py`): `Base` declarative model, engine factory.
+- **Migrations** (`migrations/`): Alembic. The models describe the prod schema exactly
+  (since 2026-11-05, migration `015_legacy_schema_fixes`); `alembic check` must report
+  "No new upgrade operations detected" against a DB at head. Run it before writing a
+  migration and after changing a model. See `src/data/db/docs/README.md`.
 
 #### 5.4 Cache (`src/data/cache/`)
 Pipeline-level caching for expensive computations (e.g. ML feature matrices).
@@ -300,14 +306,27 @@ schedule control, and PnL notifications.
 
 ## 8. Portfolio
 
+**Path:** `src/portfolio/`
+
+Three independent jobs on the user's IBKR accounts, all fed by IBKR Flex Query XML
+and notifying through `NotificationServiceClient`:
+
+| Submodule | Job | Schedule (UTC) |
+|-----------|-----|----------------|
+| `pnl_alert/` | Daily unrealised-PnL threshold alert | 21:30 Mon–Fri |
+| `trade_ledger/` | Monthly trade ledger + weighted average cost email | 06:00 on the 2nd |
+| `management/` | Stop-loss reminder before earnings | every 15 min, 12–22 Mon–Fri |
+
+### 8.1 PnL Alert
+
 **Path:** `src/portfolio/pnl_alert/`
 
-### Purpose
+#### Purpose
 Daily end-of-day portfolio PnL alert. Merges IBKR positions (from Flex Query XML)
 with an optional YAML watchlist, fetches current prices, and sends a Telegram +
 email notification if any holding is above a configured threshold.
 
-### Pipeline (runs at 21:30 UTC Mon–Fri)
+#### Pipeline (runs at 21:30 UTC Mon–Fri)
 ```
 load_ibkr_xml()          ← Open_Positions.xml (IBKR Flex Query export)
 load_watchlist()         ← config/watchlist.yaml
@@ -317,7 +336,7 @@ evaluate()               ← compute unrealised PnL %
 send_alert()             ← Telegram + email via NotificationService
 ```
 
-### Key Files
+#### Key Files
 | File | Responsibility |
 |------|---------------|
 | `ibkr_xml_loader.py` | Parse IBKR Flex Query XML; apply `_IBKR_SYMBOL_MAP` for exchange suffixes |
@@ -329,7 +348,7 @@ send_alert()             ← Telegram + email via NotificationService
 | `runner.py` | Async orchestration |
 | `config.py` | `PnLAlertConfig` dataclass + YAML loader |
 
-### Symbol Mapping
+#### Symbol Mapping
 IBKR exports non-US ETFs without exchange suffix. `_IBKR_SYMBOL_MAP` in
 `ibkr_xml_loader.py` translates at parse time:
 ```python
@@ -339,9 +358,68 @@ _IBKR_SYMBOL_MAP = {
 ```
 Add entries here for any non-US symbol that gets a 404 from data providers.
 
-### Configuration
+#### Configuration
 `src/portfolio/pnl_alert/config/pnl_alert.yaml` — threshold %, channels, cron,
 watchlist path, IBKR XML path, recipient user ID.
+
+### 8.2 Trade Ledger
+
+**Path:** `src/portfolio/trade_ledger/`  
+**Scheduler target:** `portfolio.trade_ledger` (job type ALERT), cron `0 6 2 * *`
+
+#### Purpose
+Monthly email (HTML + XLSX attachment) of every IBKR share execution in the previous
+month with commission, and the **true weighted average cost per ticker** across both
+accounts. IBKR's own average is per lot (FIFO); this module replays the full trade
+history since 2020 to compute it. Also: realized P&L (month, YTD, lifetime), dividends
+net of withholding tax, P&L per ticker since 2020, and net deposits per currency.
+
+#### Pipeline
+```
+download_flex_statement()  ← Flex Web Service, query "My Trades" (pnl_alert.flex_downloader)
+xml_parser                 ← executions, corporate actions, transfers, cash, open positions
+repository / TradeLedgerService  ← idempotent upsert into trade_ledger_* tables
+ledger_engine              ← replay since 2020: WAC excl./incl. commission, cycles, P&L
+reconciler                 ← share counts vs IBKR month-end open positions
+report_builder / xlsx_writer  ← HTML + plain text + XLSX
+notifier                   ← email via NotificationServiceClient
+```
+
+#### Key Files
+| File | Responsibility |
+|------|---------------|
+| `xml_parser.py` | Parse Flex XML (multi-statement, both accounts) into dataclasses |
+| `repository.py` | Adapter over `TradeLedgerService` (`src/data/db`) |
+| `ledger_engine.py` | Pure engine: WAC, cycle reset at 0 shares, splits, transfers, P&L |
+| `reconciler.py` | Ledger vs IBKR open-position checkpoints; mismatches top the email |
+| `report_builder.py` / `xlsx_writer.py` | Email body and XLSX attachment |
+| `runner.py` / `cli.py` | `import`, `reconcile`, `run [--month] [--dry-run] [--no-download]` |
+| `seed_schedule.py` | Create / update the `job_schedules` row from the YAML cron |
+
+#### Configuration
+`src/portfolio/trade_ledger/config/trade_ledger.yaml` — recipient, channels, cron,
+raw XML and reports directories. Env: `IBKR_FLEX_TRADES_QUERY_ID` (Flex token shared
+with pnl_alert). Raw XML holds account data and lives under `data/` (gitignored).
+DB: migration `014_trade_ledger`. Details: `src/portfolio/trade_ledger/README.md`.
+
+### 8.3 Stop-Loss Reminder (Management)
+
+**Path:** `src/portfolio/management/`  
+**CLI:** `python -m src.portfolio.management`
+
+#### Purpose
+Reminds the user (Telegram + email) when a held ticker has an upcoming earnings release
+and no working protective stop order (`STP`, `STP LMT`, `TRAIL`, `TRAIL LIMIT`) covers
+the position. Checks at T-1 day and T-1 hour (BMO/AMC-aware). **Reminder only — it never
+places, modifies or cancels an order.**
+
+#### Integration
+- Holdings from `pnl_alert`'s Flex XML pipeline; earnings dates from the
+  `p05_ai_selector` FMP earnings calendar.
+- Reads open orders from the **live** IBKR Gateway, read-only, with its own clientId
+  `IBKR_LIVE_STOP_GUARD_CLIENT_ID`.
+- Config: `src/portfolio/management/config_data/management.yaml`. Details:
+  `src/portfolio/management/README.md`.
 
 ---
 

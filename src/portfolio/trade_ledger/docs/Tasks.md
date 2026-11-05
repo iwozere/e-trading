@@ -47,7 +47,8 @@
         VT differs only by IBKR's per-account transfer cost; scratch-DB `import` → `reconcile`
         7/7 → `run --month 2026-10 --dry-run` with a real Flex download ok
 12. [x] pyright + mypy clean (`scripts/typecheck.py`, whole repo, 2026-11-04)
-13. [ ] Deploy on Pi: migration 014, import backfill, seed schedule, one manual `run --month 2026-10`
+13. [x] Deploy on Pi: migration 014, import backfill, seed schedule, one manual `run --month 2026-10` (live 2026-11-04;
+        deposit rows confirmed in the Pi DB 2026-11-05)
 14. [x] **Deposits** (requested and built 2026-11-04): net deposits for the month, YTD and since start, per currency,
         as tiles / a small table. No Flex change needed — Cash Transactions already carry type
         `Deposits/Withdrawals` (backfill: 54 deposits, all CHF, no withdrawals). Add the type to
@@ -75,12 +76,12 @@
   checkpoints are the range ends (year-ends + 2026-10-30), not every month.
 
 ## Testing Requirements
-- [ ] Unit tests per component (pure engine fully covered)
+- [x] Unit tests per component (pure engine fully covered)
 - [x] Parser test on a fixture that mimics the real multi-statement layout
-- [ ] Idempotent re-import test (same file twice → same row counts)
-- [ ] End-to-end dry run on real backfill data (manual, step 11)
+- [x] Idempotent re-import test (same file twice → same row counts): `test_repository.py`, `test_runner.py`, `test_repo_trade_ledger.py`
+- [x] End-to-end dry run on real backfill data (manual, step 11)
 
 ## Documentation Updates
-- [ ] README.md with Quick Start
+- [x] README.md with Quick Start
 - [x] Update `pnl_alert` Design.md: flex_downloader generalized
-- [ ] `docs/SUBMODULES.md` entry
+- [x] `docs/SUBMODULES.md` entry (section 8.2)
