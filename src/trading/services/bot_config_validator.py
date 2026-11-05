@@ -287,7 +287,7 @@ def validate_database_bot_record(bot_record: Dict[str, Any], new_record: bool = 
             config = json.loads(config)
 
         # Use schema-based validator directly
-        config_valid, config_errors, config_warnings = validate_bot_configuration(config)
+        _, config_errors, config_warnings = validate_bot_configuration(config)
         errors.extend(config_errors)
         warnings.extend(config_warnings)
 
@@ -303,7 +303,7 @@ def validate_database_bot_record(bot_record: Dict[str, Any], new_record: bool = 
 
 def print_validation_results(bot_id: str, is_valid: bool, errors: List[str], warnings: List[str]) -> None:
     """
-    Print validation results in a formatted way.
+    Log validation results: errors at error level, warnings at warning level.
 
     Args:
         bot_id: Bot identifier for context
@@ -311,26 +311,8 @@ def print_validation_results(bot_id: str, is_valid: bool, errors: List[str], war
         errors: List of validation errors
         warnings: List of validation warnings
     """
-    print(f"\n{'=' * 60}")
-    print(f"BOT CONFIGURATION VALIDATION - {bot_id}")
-    print(f"{'=' * 60}")
-
-    if is_valid:
-        print("✅ Configuration is VALID")
-    else:
-        print("❌ Configuration is INVALID")
-
-    if errors:
-        print(f"\n❌ ERRORS ({len(errors)}):")
-        for i, error in enumerate(errors, 1):
-            print(f"  {i}. {error}")
-
-    if warnings:
-        print(f"\n⚠️  WARNINGS ({len(warnings)}):")
-        for i, warning in enumerate(warnings, 1):
-            print(f"  {i}. {warning}")
-
-    if not errors and not warnings:
-        print("\n✅ No issues found!")
-
-    print(f"{'=' * 60}\n")
+    _logger.info("Bot configuration %s: %s (%d errors, %d warnings)", bot_id, "VALID" if is_valid else "INVALID", len(errors), len(warnings))
+    for i, error in enumerate(errors, 1):
+        _logger.error("Bot %s config error %d: %s", bot_id, i, error)
+    for i, warning in enumerate(warnings, 1):
+        _logger.warning("Bot %s config warning %d: %s", bot_id, i, warning)
