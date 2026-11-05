@@ -24,6 +24,9 @@ from src.ml.pipeline.p24_falling_knife.config import UniverseParams
 _PLAIN_SYMBOL_RE = re.compile(r"^[A-Z]{1,5}$")
 # Nasdaq fifth-letter suffixes for warrants, rights, units and preferreds (FMP types some preferreds as "stock").
 _DERIVATIVE_SUFFIX_RE = re.compile(r"^[A-Z]{4}[WRUP]$")
+# Exchange test listings (NASDAQ ZXZZT "SuperMontage TEST", IEX CBX "IEX Test Common Stock", ...).
+_TEST_NAME_RE = re.compile(r"(?i)\btest\s+(common\s+)?stock\b|\bsupermontage\s+test\b")
+_TEST_SYMBOL_RE = re.compile(r"^Z[A-Z]ZZT$")
 _COLUMNS = ["security_id", "symbol", "name", "exchange", "instrument_type", "first_price_date", "last_price_date",
             "delisted_date", "is_actively_trading", "valid_to", "identity_uncertain"]
 
@@ -91,7 +94,7 @@ def is_common_stock(security: Security, include_adr: bool = False) -> bool:
     True for a plain common-stock listing with price history (ADRs only if ``include_adr``).
 
     Excludes ETFs/funds, warrants, units, rights, preferreds (also those FMP types as stock, by symbol suffix), other
-    share-class symbols, and securities whose identity the FMP builder could not settle.
+    share-class symbols, exchange test listings, and securities whose identity the FMP builder could not settle.
 
     Args:
         security: Vintage security.
@@ -104,6 +107,8 @@ def is_common_stock(security: Security, include_adr: bool = False) -> bool:
         return False
     allowed = {"stock", "adr"} if include_adr else {"stock"}
     if security.instrument_type not in allowed:
+        return False
+    if _TEST_SYMBOL_RE.match(security.symbol) or _TEST_NAME_RE.search(security.name or ""):
         return False
     return bool(_PLAIN_SYMBOL_RE.match(security.symbol)) and not _DERIVATIVE_SUFFIX_RE.match(security.symbol)
 

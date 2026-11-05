@@ -203,7 +203,7 @@ def _random_control(security: Security, timeframe: str, period: str, ctx: Series
             fake = BarEval(t=int(b), p1=sig.p1, l2=int(np.argmin(ctx.close[sig.p1 + 1:b + 1])) + sig.p1 + 1,
                            drop=sig.drop, seg_start=sig.p1, cci_3=sig.cci_3, w_min=sig.w_min)
             trade = simulate_trade(ctx, fake, params, spec.config.costs, delisted=security.delisted)
-            returns.append(trade.net_return if trade is not None else np.nan)
+            returns.append(trade.net_return if trade is not None and not trade.suspect_in_trade else np.nan)
     return {
         "security_id": security.security_id,
         "timeframe": timeframe,

@@ -44,6 +44,7 @@ class Trade:
     shakeout_seen: bool
     shakeout_widening: bool
     delisted_in_trade: bool
+    suspect_in_trade: bool = False
 
 
 def simulate_trade(ctx: SeriesContext, signal: BarEval, params: TimeframeParams, costs: CostModel,
@@ -120,6 +121,7 @@ def simulate_trade(ctx: SeriesContext, signal: BarEval, params: TimeframeParams,
         shakeout_seen=shakeout_seen,
         shakeout_widening=shakeout_widening,
         delisted_in_trade=delisted and exit_bar >= last,
+        suspect_in_trade=bool(ctx.cliff[entry_bar + 1:exit_bar + 1].any()),
     )
 
 

@@ -155,7 +155,10 @@ def data_cliffs(close: np.ndarray, volume: np.ndarray, params: TimeframeParams,
     - the close fell at least ``cliff_drop`` on volume below ``cliff_volume_ratio`` × the prior median (spin-offs);
     - FMP flagged the bar ``JUMP_NO_SPLIT`` (close ratio near a split ratio, no split recorded) and volume is below
       ``jump_volume_ratio`` × the prior median. A −33% or −50% crash on heavy volume also matches the price rule, so
-      the flag alone is not enough.
+      the flag alone is not enough;
+    - the close rose at least ``splice_ratio``-fold in one bar on volume below ``jump_volume_ratio`` × the prior median
+      (bankrupt shares spliced onto post-reorganisation equity, a missed reverse split, a test symbol). Such a bar
+      inside a trade marks the trade ``suspect_in_trade``.
 
     Args:
         close: Closes.
@@ -172,8 +175,10 @@ def data_cliffs(close: np.ndarray, volume: np.ndarray, params: TimeframeParams,
     median_volume = volume_s.shift(1).rolling(params.cliff_volume_bars, min_periods=5).median()
     quiet_cliff = (fall >= params.cliff_drop) & (volume_s < params.cliff_volume_ratio * median_volume)
     out = quiet_cliff.fillna(False).to_numpy(dtype=bool, copy=True)
+    quiet_jump = (volume_s < params.jump_volume_ratio * median_volume).fillna(True).to_numpy(dtype=bool)
+    splice = (close_s / close_s.shift(1) >= params.splice_ratio).fillna(False).to_numpy(dtype=bool)
+    out |= splice & quiet_jump
     if jump_no_split is not None:
-        quiet_jump = (volume_s < params.jump_volume_ratio * median_volume).fillna(True).to_numpy(dtype=bool)
         out |= np.asarray(jump_no_split, dtype=bool) & quiet_jump
     return out
 

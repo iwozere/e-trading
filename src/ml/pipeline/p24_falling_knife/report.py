@@ -3,7 +3,7 @@ P24 Falling Knife — Phase 1 report (spec §8, §11).
 
 Reads one backtest run folder and writes ``report.md``: the survivorship warning first, then per timeframe the
 variant table, controls, exit reasons, cost sensitivity, price buckets, concentration and — when holdout trades
-exist — the go/no-go gate. Trades flagged ``suspect_gap`` are excluded from every statistic and counted separately.
+exist — the go/no-go gate. Trades flagged ``suspect_gap`` or ``suspect_in_trade`` are excluded from every statistic and counted separately.
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ from src.ml.pipeline.p24_falling_knife.validation import (
 )
 
 CONTROL = "drop_only"
+SUSPECT_COLUMNS = ("suspect_gap", "suspect_in_trade")
 PERIODS = (TRAIN, HOLDOUT, UPPER_BOUND)
 COST_MULTIPLIERS = (0.5, 1.0, 2.0, 3.0)
 
@@ -44,7 +45,11 @@ def _table(header: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
 
 
 def _clean(trades: pd.DataFrame) -> pd.DataFrame:
-    return trades[~trades["suspect_gap"].astype(bool)] if "suspect_gap" in trades.columns else trades
+    keep = pd.Series(True, index=trades.index)
+    for column in SUSPECT_COLUMNS:
+        if column in trades.columns:
+            keep &= ~trades[column].fillna(False).astype(bool)
+    return trades[keep]
 
 
 def survivorship_section(run_dir: Path) -> str:
@@ -185,7 +190,7 @@ def build_report(run_dir: Path, costs: CostModel, portfolio: PortfolioParams = P
     parts: List[str] = [f"# P24 Falling Knife — backtest report `{run_dir.name}`\n",
                         "Returns are per trade, net of tiered costs (as-traded price), split-adjusted, dividends "
                         "excluded. Entry next open after the signal bar. CIs are month-block bootstraps. Trades whose "
-                        "drop contains a suspected unadjusted corporate event (`suspect_gap`) are excluded below.\n",
+                        "drop (`suspect_gap`) or holding period (`suspect_in_trade`) contains a suspected unadjusted corporate event are excluded below.\n",
                         survivorship_section(run_dir)]
     for timeframe in (DAILY, WEEKLY):
         path = run_dir / f"trades_{timeframe}.csv"
@@ -194,7 +199,7 @@ def build_report(run_dir: Path, costs: CostModel, portfolio: PortfolioParams = P
         trades = pd.read_csv(path)
         if trades.empty:
             continue
-        suspect = int(trades["suspect_gap"].astype(bool).sum()) if "suspect_gap" in trades.columns else 0
+        suspect = len(trades) - len(_clean(trades))
         sections: Dict[str, str] = {
             "Variants (ablations)": variant_section(trades),
             "Controls": control_section(trades, draws, timeframe),
@@ -205,7 +210,7 @@ def build_report(run_dir: Path, costs: CostModel, portfolio: PortfolioParams = P
             "Portfolio (full system)": portfolio_section(trades, portfolio),
             "Go/no-go gate (holdout)": gate_section(trades, costs),
         }
-        parts.append(f"## {timeframe.capitalize()}\n\n{suspect} trade rows flagged `suspect_gap` were excluded.\n")
+        parts.append(f"## {timeframe.capitalize()}\n\n{suspect} trade rows flagged `suspect_gap` or `suspect_in_trade` were excluded.\n")
         parts.extend(f"### {title}\n\n{body}\n" for title, body in sections.items())
     return "\n".join(parts)
 

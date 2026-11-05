@@ -101,6 +101,10 @@ def test_common_stock_filter() -> None:
     assert not is_common_stock(_security(symbol="ABCDW"))
     assert not is_common_stock(_security(symbol="BRK-B"))
     assert not is_common_stock(_security(identity_uncertain=True))
+    assert not is_common_stock(_security(symbol="ZXZZT"))
+    assert not is_common_stock(_security(symbol="CBX", name="IEX Test Common Stock ZXIET"))
+    assert is_common_stock(_security(symbol="INTT", name="inTEST Corporation"))
+    assert is_common_stock(_security(symbol="AEHR", name="Aehr Test Systems"))
 
 
 def test_survivorship_table_flags_thin_years() -> None:

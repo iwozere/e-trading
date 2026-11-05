@@ -131,6 +131,14 @@ def test_fmp_jump_flag_counts_only_on_quiet_volume() -> None:
     assert data_cliffs(close, light, DAILY_PARAMS, jumps)[30]
 
 
+def test_data_cliff_flags_quiet_reorg_splice() -> None:
+    close = np.full(60, 0.5)
+    close[40:] = 40.0
+    volume = np.full(60, 1e6)
+    assert data_cliffs(close, volume * np.where(np.arange(60) == 40, 0.1, 1.0), DAILY_PARAMS)[40]
+    assert not data_cliffs(close, volume * np.where(np.arange(60) == 40, 10.0, 1.0), DAILY_PARAMS)[40]
+
+
 def test_ineligible_bars_never_signal() -> None:
     bars = knife_bars()
     ctx = build_context(bars, DAILY_PARAMS, eligible=np.zeros(len(bars), dtype=bool))

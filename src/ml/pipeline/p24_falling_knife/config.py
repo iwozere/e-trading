@@ -80,6 +80,7 @@ class TimeframeParams:
     cliff_volume_ratio: float = 1.5
     cliff_volume_bars: int = 20
     jump_volume_ratio: float = 3.0
+    splice_ratio: float = 4.0
 
     # §4.9 exits and §5.3 shakeout
     cci_exit: float = 200.0
