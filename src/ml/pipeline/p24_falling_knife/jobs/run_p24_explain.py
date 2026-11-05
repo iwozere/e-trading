@@ -24,9 +24,11 @@ sys.path.insert(0, str(PROJECT_ROOT))
 import pandas as pd  # noqa: E402
 
 from src.data.fmp_pipeline.datamanager_adapter.fmp_store import FmpStore  # noqa: E402
+from src.ml.pipeline.p24_falling_knife.chart import DAILY_WINDOW, WEEKLY_WINDOW, plot_signal  # noqa: E402
 from src.ml.pipeline.p24_falling_knife.config import DAILY, WEEKLY, P24Config  # noqa: E402
 from src.ml.pipeline.p24_falling_knife.data import load_daily_batch, series_for_timeframe  # noqa: E402
 from src.ml.pipeline.p24_falling_knife.detector import SeriesContext, build_context, detect  # noqa: E402
+from src.ml.pipeline.p24_falling_knife.exits import simulate_trade  # noqa: E402
 from src.notification.logger import setup_logger  # noqa: E402
 
 _logger = setup_logger(__name__)
@@ -42,6 +44,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--data-root", type=Path, default=Path("D:/data-cache/fmp-data"))
     parser.add_argument("--set", nargs="*", default=[], help="Parameter overrides name=value (floats/ints)")
     parser.add_argument("--out", type=Path, default=None, help="Also write the table as CSV")
+    parser.add_argument("--chart-dir", type=Path, default=None, help="Write a PNG chart per signal in the range")
     return parser.parse_args(argv)
 
 
@@ -95,6 +98,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                  len(table), in_range, table.to_string(index=False) if not table.empty else "(no bar passed the drop rule)")
     if args.out is not None and not table.empty:
         table.to_csv(args.out, index=False)
+    if args.chart_dir is not None:
+        window = WEEKLY_WINDOW if args.timeframe == WEEKLY else DAILY_WINDOW
+        for sig in signals:
+            when = ctx.index[sig.t].date()
+            if not args.start <= when <= args.end:
+                continue
+            trade = simulate_trade(ctx, sig, params, config.costs, delisted=False)
+            path = plot_signal(ctx, sig, args.chart_dir / f"{args.symbol}_{args.timeframe}_{when}.png",
+                               f"{args.symbol} {args.timeframe} signal {when}", trade, window)
+            _logger.info("Chart written: %s", path)
     return 0
 
 

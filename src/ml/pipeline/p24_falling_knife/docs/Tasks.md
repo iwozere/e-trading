@@ -18,8 +18,9 @@
 
 ### 🚀 PLANNED ENHANCEMENTS
 - [ ] M7 Calibration grid on train (plateau pick, `calibration_frozen.json`), holdout run once, owner gate
-- [ ] M7 Book-example check (§7.6: MPWR weekly, VMW daily, DIA daily, QQQ weekly)
-- [ ] M7 `chart.py` 4-panel charts (20 sample trades in the report; reused by Phase 2)
+- [x] M7 Book-example check (§7.6) — see spec §14.2
+- [x] M7 `chart.py` 4-panel charts + `run_p24_explain.py --chart-dir`
+- [ ] M7 20 sample charts in the report
 - [ ] M7 Portfolio layer (§6.3: max 20 positions, liquidity cap, daily marks)
 - [ ] Phase 2 (after gate): live scan, paper positions, notifications, signal-ledger harvester, `p24_specs.py`
 - [ ] Phase 3: index mode, multi-timeframe confirmation, on-the-way-down statistics
@@ -35,7 +36,7 @@
 - `JUMP_NO_SPLIT` + quiet-volume rule is a heuristic; a missing split traded on heavy volume would slip through.
 
 ## Testing Requirements
-- [x] Unit tests for every module (58 tests)
+- [x] Unit tests for every module (59 tests)
 - [ ] Truncation test on real vintage securities (currently synthetic + random-walk series)
 
 ## Documentation Updates
