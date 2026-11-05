@@ -10,6 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p22_biotech_ma.ingest.deal_prefill import (
+    DealTerms,
     cluster_filings,
     extract_agreement_date,
     extract_parties,
@@ -49,7 +50,7 @@ def test_name_key_ignores_case_punctuation_and_suffixes():
     assert name_key("The Medicines Company") == "medicines"
 
 
-def test_extract_agreement_date_takes_earliest_plausible_date():
+def test_extract_agreement_date_breaks_ties_with_earliest_date():
     text = (
         "Agreement and Plan of Merger, dated as of March 2, 2024. Amendment No. 1 to the Merger Agreement, "
         "dated as of April 10, 2024. A prior Merger Agreement dated as of May 1, 2015 was terminated."
@@ -110,16 +111,16 @@ def test_extract_terms_reverse_merger_from_holders_stake():
 
 
 def test_suggest_deal_type_rejects_when_subject_holders_keep_majority():
-    terms = SimpleNamespace(target_holders_pct=0.7, acquirer_name="X Inc", upfront_per_share=None)
-    deal_type, note = suggest_deal_type("S-4", terms)  # type: ignore[arg-type]
+    terms = DealTerms(target_holders_pct=0.7, acquirer_name="X Inc")
+    deal_type, note = suggest_deal_type("S-4", terms)
     assert deal_type is None and note is not None and "acquirer" in note
 
 
 def test_suggest_deal_type_shell_and_pe_buyers():
-    shell = SimpleNamespace(target_holders_pct=None, acquirer_name="Concentra Biosciences, LLC", upfront_per_share=2.0)
-    pe = SimpleNamespace(target_holders_pct=None, acquirer_name="Blackstone Life Sciences LLC", upfront_per_share=2.0)
-    assert suggest_deal_type("SC 14D9", shell)[0] == "shell_transaction"  # type: ignore[arg-type]
-    assert suggest_deal_type("SC 14D9", pe)[0] == "pe_take_private"  # type: ignore[arg-type]
+    shell = DealTerms(acquirer_name="Concentra Biosciences, LLC", upfront_per_share=2.0)
+    pe = DealTerms(acquirer_name="Blackstone Life Sciences LLC", upfront_per_share=2.0)
+    assert suggest_deal_type("SC 14D9", shell)[0] == "shell_transaction"
+    assert suggest_deal_type("SC 14D9", pe)[0] == "pe_take_private"
 
 
 def test_cluster_filings_splits_on_long_gap_and_per_company():
@@ -203,3 +204,85 @@ def test_prefill_cluster_reverse_merger_majority_holders_rejects_all_rows():
     rows = prefill_cluster(cluster, lambda r: text)
     assert [r["action"] for r in rows] == ["reject", "reject"]
     assert "acquirer" in rows[0]["note"]
+
+
+def test_extract_agreement_date_prefers_most_repeated_date():
+    text = (
+        "Agreement and Plan of Merger, dated as of February 5, 2015. Centerview delivered its opinion on the "
+        "merger agreement and in connection with the delivery of its opinion, dated February 4, 2015. "
+        "The Agreement and Plan of Merger, dated as of February 5, 2015, provides for the merger."
+    )
+    assert extract_agreement_date(text, filed=date(2015, 4, 10)) == date(2015, 2, 5)
+
+
+def test_extract_parties_reads_which_we_refer_to_as_definitions():
+    text = (
+        "Covance Inc., a Delaware corporation, which we refer to as Covance, and Laboratory Corporation of "
+        "America Holdings, which we refer to as LabCorp, have entered into an Agreement and Plan of Merger."
+    )
+    parties = extract_parties(text)
+    assert parties["Covance"] == "Covance Inc."
+    assert parties["LabCorp"] == "Laboratory Corporation of America Holdings"
+
+
+def test_extract_parties_trims_leading_prose_but_keeps_lowercase_suffixes():
+    text = (
+        'On behalf of the boards of directors of Bristol-Myers Squibb Company ("Bristol-Myers Squibb") we write. '
+        'As previously announced, on November 16, 2014, Actavis plc ("Actavis") agreed to acquire Allergan.'
+    )
+    parties = extract_parties(text)
+    assert parties["Bristol-Myers Squibb"] == "Bristol-Myers Squibb Company"
+    assert parties["Actavis"] == "Actavis plc"
+
+
+def test_pick_acquirer_falls_back_to_most_mentioned_party():
+    parties = {"Forest": "Forest Laboratories, Inc.", "Actavis": "Actavis plc", "Greenhill": "Greenhill & Co., LLC"}
+    mentions = {"Forest": 900, "Actavis": 700, "Greenhill": 150}
+    assert pick_acquirer(parties, "FOREST LABORATORIES INC", mentions=mentions) == "Actavis plc"
+    assert pick_acquirer(parties, "FOREST LABORATORIES INC", mentions={"Actavis": 5}) is None
+
+
+def test_extract_price_reads_cash_and_stock_consideration():
+    text = "Covance holders are entitled to receive 0.2686 shares of LabCorp common stock and $75.76 in cash, without interest."
+    assert extract_price(text) == 75.76
+
+
+def test_suggest_deal_type_rejects_non_acquisitions():
+    assert suggest_deal_type("S-4", DealTerms(is_debt_exchange=True))[1] is not None
+    assert suggest_deal_type("SC 14D9", DealTerms(is_mini_tender=True))[1] is not None
+    note = suggest_deal_type("S-4", DealTerms(acquirer_name="Abraxis BioScience, Inc.", upfront_per_share=43.0))[1]
+    assert note is not None and "acquirer" in note
+
+
+def test_suggest_deal_type_minority_stake_with_cash_is_strategic():
+    terms = DealTerms(target_holders_pct=0.31, acquirer_name="Bristol-Myers Squibb Company", upfront_per_share=50.0)
+    assert suggest_deal_type("DEFM14A", terms) == ("strategic_acquisition", None)
+
+
+def test_suggest_deal_type_all_stock_proxy_needs_reverse_merger_wording():
+    terms = DealTerms(target_holders_pct=0.45, acquirer_name="Alumis Inc.")
+    assert suggest_deal_type("DEFM14A", terms) == (None, None)
+    terms.mentions_reverse_merger = True
+    assert suggest_deal_type("DEFM14A", terms) == ("reverse_merger", None)
+
+
+def test_extract_terms_flags_debt_exchange_offer():
+    text = "Exchange offer for outstanding notes. " + "The old notes and the exchange notes. " * 60
+    assert extract_terms(text, filed=date(2020, 5, 20), subject_name="Biogen Inc").is_debt_exchange is True
+    assert extract_terms(_TENDER, filed=date(2012, 4, 16), subject_name="ALLOS THERAPEUTICS INC").is_debt_exchange is False
+
+
+def test_prefill_cluster_competing_acquirers_left_for_human():
+    hostile = _TENDER.replace("Spectrum Pharmaceuticals, Inc.", "Valeant Pharmaceuticals International, Inc.")
+    texts = {"u1": hostile, "u2": _TENDER}
+    rows = prefill_cluster(_cluster(), lambda r: texts[r["evidence_url"]])
+    assert rows[0]["prefill_confidence"] == "low"
+    assert "acquirer differs" in rows[0]["prefill_evidence"]
+    assert "action" not in rows[0]
+
+
+def test_prefill_cluster_reject_clears_entry_fields():
+    cluster = [dict(r, form_type="S-4") for r in _cluster()]
+    rows = prefill_cluster(cluster, lambda r: _TENDER)
+    assert rows[0]["action"] == "reject" and "acquirer" in rows[0]["note"]
+    assert rows[0]["acquirer_name"] == "" and rows[0]["upfront_per_share"] == ""

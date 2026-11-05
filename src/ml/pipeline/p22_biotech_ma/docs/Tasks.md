@@ -895,6 +895,19 @@ use in the code/config; this section exists so they're all in one place to walk 
   flags; `action` stays blank (`prefill_confidence` low / check_price / flags) unless every required field
   was found and nothing fired. Smoke-tested on 4 real filings (Salix/Valeant $173, Allos/Spectrum $1.82 +
   CVR, Chembio/Biosynex $0.45, TherapeuticsMD/Athene $10 + CVR). Not yet run on prod data.
+  - **Prod trial 2026-11-05 (`--limit 20`): only 1 of 20 drafts usable**, fixed the same day. Most
+    candidates for big-pharma filers are not acquisitions of the company: S-4 debt exchange offers (Teva,
+    Amgen, Pfizer, Biogen, BMS, Genzyme → `reject`, detected as "notes" ≥100× with ≤2 merger-agreement
+    mentions), S-4s the company files to issue stock for its own acquisition (Abbott/St. Jude, Celgene/
+    Abraxis, J&J/Synthes, Shire/Baxalta, BMS/Celgene → `reject`; an S-4 filer is the buyer unless its
+    holders keep <50%), and a mini-tender (Celgene/TRC → `reject`). Also fixed: agreement date = most
+    repeated plausible date (Hospira took a fairness-opinion date); `which we refer to as` parties and a
+    most-mentioned-party fallback (Actavis, LabCorp have no "Parent" label); cash-and-stock price wording
+    (Covance $75.76, Forest $26.04); minority holders' stake with cash = strategic, not reverse merger
+    (Covance, BMS/Celgene); all-stock public mergers without "reverse merger" wording left blank
+    (Alumis/ACELYRIN); differing acquirers in one cluster → `low` (Valeant hostile bid vs Actavis for
+    Allergan); reject rows no longer carry the other deal's terms. Re-run on the cached trial filings:
+    20/20 correct (5 `deal`, 13 `reject`, 2 left for a human).
 - **FIXED 2026-11-05: entity-match queue re-asked reviewed aliases daily.** `run_alias_matching` only
   suppressed pairs with a PENDING item, and `match_alias` never reads `p22_company_alias`, so confirmed and
   rejected fuzzy aliases came back every run; 3,941 pending items covered 55 distinct pairs (most from
