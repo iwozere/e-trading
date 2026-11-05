@@ -71,7 +71,7 @@ _NOT_COUNTERPARTY = (
     "piper", "moelis", "perella", "citigroup", "barclays", "merrill", "credit suisse", "ubs", "wells fargo",
     "stifel", "raymond james", "wedbush", "oppenheimer", "wainwright", "ladenburg", "partners",
     "greenhill", "rothschild", "houlihan", "qatalyst", "pjt", "allen & company", "deutsche", "hsbc", "bofa",
-    "insurance corporation",
+    "insurance corporation", "board of",
 )
 _PARENT_LABELS = ("Parent", "Acquirer", "Acquiror", "Buyer", "Offeror", "Purchaser Parent")
 _SUB_LABELS = ("Purchaser", "Merger Sub", "Merger Subsidiary", "Sub", "Acquisition Sub", "Offeror Sub")
@@ -88,7 +88,7 @@ _NUM = r"(\d{1,4}(?:,\d{3})*(?:\.\d{1,4})?)"
 
 _AGREEMENT_DATE_PATTERNS = (
     re.compile(
-        rf"(?:Agreement and Plan of Merger|Merger Agreement|Transaction Agreement|Arrangement Agreement)"
+        rf"(?:Agreement and Plan of Merger|Merger Agreement|Transaction Agreement|Arrangement Agreement|Asset Purchase Agreement)"
         rf"[^.;]{{0,120}}?dated\s+(?:as\s+of\s+)?({_DATE})",
         re.I,
     ),
@@ -98,7 +98,11 @@ _AGREEMENT_DATE_PATTERNS = (
         re.I,
     ),
 )
-_PARTY_DEF = re.compile(r'([A-Z][^()"]{1,160}?)\s*\(\s*(?:the\s+|collectively,\s+)?"([A-Z][A-Za-z&\-. ]{1,40})"\s*\)')
+# `Name ("Label")`, also `(which we refer to as "Label")` and `(" Label ")` (spaces left by stripped tags).
+_PARTY_DEF = re.compile(
+    r'([A-Z][^()"]{1,160}?)\s*\(\s*(?:the\s+|collectively,\s+|(?:which\s+)?we\s+refer\s+to\s+as\s+(?:the\s+)?)?'
+    r'"\s*([A-Z][A-Za-z&\-. ]{0,40}?)\s*"\s*\)'
+)
 _NAME_JOINERS = {"of", "&", "de", "du", "la", "und"}
 # Proxy-statement style: `Laboratory Corporation of America Holdings, which we refer to as LabCorp,`.
 _PARTY_REFER = re.compile(
@@ -114,6 +118,11 @@ MIN_ACQUIRER_MENTIONS = 20  # a counterparty named without a Parent label must d
 # Most specific wording first: the first tier with any match decides the price. Generic "$X per share
 # in cash" also hits earlier proposals in the background section and CVR amounts, so it is a last resort.
 _PRICE_TIERS = (
+    # ADS-listed companies (Verona, Centessa): prices in our data are per ADS, so the ADS amount wins.
+    (
+        re.compile(rf"\$\s?{_NUM}\s+(?:in cash\s+)?per\s+(?:ADS|American Depositary Share)\b", re.I),
+        re.compile(rf"per\s+ADS\s+equal\s+to\s+\$\s?{_NUM}", re.I),
+    ),
     (
         re.compile(rf"\$\s?{_NUM}[^.$]{{0,40}}?per\s+share,?\s+net to the (?:seller|holder)s? in cash", re.I),
         re.compile(rf"net to the (?:seller|holder)s? in cash(?:,)? equal to\s+\$\s?{_NUM}", re.I),
@@ -141,7 +150,7 @@ _CVR_AMOUNTS = (
 _EXCHANGE_RATIO = re.compile(r"exchange ratio", re.I)
 _HOLDERS_PCT = re.compile(
     r"([A-Z][A-Za-z0-9\-]+)(?:'s)?\s+(?:pre-merger\s+|existing\s+|current\s+|legacy\s+|former\s+)?"
-    r"(?:stock|share)holders[^.%]{0,150}?(?:own|hold)[^.%]{0,40}?approximately\s+(\d{1,2}(?:\.\d+)?)\s?%"
+    r"(?:stock|share)holders[^.%]{0,150}?\b(?:own|hold)\b[^.%]{0,40}?approximately\s+(\d{1,2}(?:\.\d+)?)\s?%"
 )
 _MERGER_AGREEMENT = re.compile(
     r"agreement and plan of merger|merger agreement|business combination agreement|arrangement agreement"
@@ -150,6 +159,10 @@ _MERGER_AGREEMENT = re.compile(
 )
 _NOTES = re.compile(r"\bnotes\b", re.I)
 _MINI_TENDER = re.compile(r"mini-tender", re.I)
+_SPAC = re.compile(r"blank check company|special purpose acquisition", re.I)
+_ASSET_SALE = re.compile(r"asset purchase agreement|asset sale proposal|sale of substantially all", re.I)
+DESPAC_MIN_MENTIONS = 5
+ASSET_SALE_MIN_MENTIONS = 5
 _REVERSE_MERGER_WORDS = re.compile(r"reverse merger", re.I)
 DEBT_EXCHANGE_MIN_NOTES = 100  # a registered debt exchange offer says "notes" hundreds of times ...
 DEBT_EXCHANGE_MAX_AGREEMENTS = 2  # ... and never describes a merger agreement
@@ -176,6 +189,8 @@ class DealTerms:
     completed: bool = False
     is_debt_exchange: bool = False  # registered exchange offer for the company's own notes, not M&A
     is_mini_tender: bool = False  # unsolicited offer for <5% of the shares, not M&A
+    is_despac: bool = False  # merger with a blank-check SPAC: the company was private before it
+    is_asset_sale: bool = False  # the company sells assets, its shares are not acquired
     mentions_reverse_merger: bool = False
 
 
@@ -232,8 +247,8 @@ def _clean_party_name(raw: str, extra_cuts: Tuple[str, ...] = ()) -> str:
     # America Holdings" stays whole.
     words = ", ".join(kept).split(" ")
     start = len(words)
-    while start > 0 and _is_name_word(words[start - 1]):
-        start -= 1
+    while start > 0 and (_is_name_word(words[start - 1]) or (words[start - 1] == "and" and start < len(words) and words[start] == "Company")):
+        start -= 1  # "Eli Lilly and Company"
     while start < len(words) and words[start] in _NAME_JOINERS:
         start += 1
     return " ".join(words[start:]).strip(" ,;")
@@ -265,6 +280,25 @@ def extract_agreement_date(text: str, filed: Optional[date]) -> Optional[date]:
     return min(counts, key=lambda d: (-counts[d], d))
 
 
+def _name_before(text: str, end: int, label: str) -> Optional[str]:
+    """
+    The legal name starting with the label's first word in the 300 characters before `end` — for a
+    definition whose name holds its own parenthetical: `Novartis AG, a company limited by shares
+    ( Aktiengesellschaft ) incorporated under the laws of Switzerland (" Novartis ")`.
+    """
+    first = label.split()[0]
+    window = text[max(0, end - 300):end]
+    found = None
+    for match in re.finditer(rf"\b{re.escape(first)}\b[A-Za-z0-9&.,\- ]{{0,60}}", window):
+        words = match.group(0).split(" ")
+        for n in range(len(words), 0, -1):
+            candidate = " ".join(words[:n]).strip(" ,")
+            if _LEGAL_SUFFIX.search(candidate):
+                found = candidate
+                break
+    return found
+
+
 def extract_parties(text: str) -> Dict[str, str]:
     """`{label: name}` for every party defined as `Name ("Label")`, first definition of a label wins.
     Only names ending in a legal-entity suffix count — filings define plenty of non-parties the same
@@ -273,6 +307,8 @@ def extract_parties(text: str) -> Dict[str, str]:
     for match in _PARTY_DEF.finditer(text):
         label = match.group(2).strip()
         name = _clean_party_name(match.group(1))
+        if label and name_key(label) not in name.lower():
+            name = _name_before(text, match.start(), label) or name
         if (
             label not in parties and 2 <= len(name) <= 120 and _LEGAL_SUFFIX.search(name)
             and name[0].isupper() and ":" not in name and name != "Company"
@@ -315,8 +351,10 @@ def pick_acquirer(
         and "merger sub" not in name.lower()
     }
     roster = {name_key(n) for n in roster_names}
-    for name in others.values():
-        if name_key(name) in roster:
+    for label, name in others.items():
+        # A roster company named in passing (Vertex as a licensor in a reverse-merger S-4) is not the buyer.
+        named_as_buyer = mentions is None or "Parent" in label or mentions.get(label, 0) >= MIN_ACQUIRER_MENTIONS
+        if name_key(name) in roster and named_as_buyer:
             return name
     for label in _PARENT_LABELS:
         if label in others:
@@ -368,6 +406,9 @@ def extract_terms(text: str, *, filed: Optional[date], subject_name: str, roster
     agreements = len(_MERGER_AGREEMENT.findall(text))
     terms.is_debt_exchange = agreements <= DEBT_EXCHANGE_MAX_AGREEMENTS and len(_NOTES.findall(text)) >= DEBT_EXCHANGE_MIN_NOTES
     terms.is_mini_tender = bool(_MINI_TENDER.search(text))
+    terms.is_despac = len(_SPAC.findall(text)) >= DESPAC_MIN_MENTIONS
+    asset_sales = len(_ASSET_SALE.findall(text))
+    terms.is_asset_sale = asset_sales >= ASSET_SALE_MIN_MENTIONS and asset_sales > agreements
     terms.mentions_reverse_merger = bool(_REVERSE_MERGER_WORDS.search(text))
     return terms
 
@@ -429,6 +470,10 @@ def suggest_deal_type(form_type: str, terms: DealTerms) -> Tuple[Optional[str], 
         return None, "mini-tender offer for a small stake, not an acquisition"
     if terms.is_debt_exchange:
         return None, "debt exchange offer for the company's notes, not an acquisition"
+    if terms.is_despac:
+        return None, "SPAC merger (de-SPAC): the company was not public before, not an acquisition"
+    if terms.is_asset_sale:
+        return ("asset_sale", None) if acquirer else (None, None)
     if terms.target_holders_pct is not None:
         if terms.target_holders_pct >= REVERSE_MERGER_MAX_HOLDERS_PCT:
             return None, f"company is the acquirer (its holders keep {terms.target_holders_pct:.0%})"
@@ -440,10 +485,10 @@ def suggest_deal_type(form_type: str, terms: DealTerms) -> Tuple[Optional[str], 
         if terms.mentions_reverse_merger:
             return None, None  # the ownership split was not found: could be either side
         return None, "company filed the S-4 to issue its own stock, so it is the acquirer"
-    if any(b in acquirer for b in SHELL_BUYERS):
+    if terms.upfront_per_share is not None and any(b in acquirer for b in SHELL_BUYERS):
         return "shell_transaction", None
-    if any(b in acquirer for b in PE_BUYERS):
-        return "pe_take_private", None
+    if terms.upfront_per_share is not None and any(b in acquirer for b in PE_BUYERS):
+        return "pe_take_private", None  # a take-private pays cash; KKR as a selling holder (Jazz/Azur) is not one
     if terms.upfront_per_share is not None and acquirer:
         return "strategic_acquisition", None
     return None, None
@@ -452,6 +497,15 @@ def suggest_deal_type(form_type: str, terms: DealTerms) -> Tuple[Optional[str], 
 # ---------------------------------------------------------------------------
 # Rows
 # ---------------------------------------------------------------------------
+
+
+def filing_name(row: Dict[str, Any]) -> str:
+    """The company's name when it filed (first entry of `names_in_filing`), else its current name. A
+    reverse-merger shell is renamed after its private partner (Graphite Bio -> LENZ), so the current name
+    would mistake the partner's holders' stake for the subject's."""
+    names = str(row.get("names_in_filing") or "")
+    first_name = re.split(r"\s{2,}\(|\s\(CIK|\s\|\s", names, maxsplit=1)[0].strip()
+    return first_name or str(row.get("company_name") or "")
 
 
 def _filed(row: Dict[str, Any]) -> Optional[date]:
@@ -560,7 +614,7 @@ def prefill_cluster(
     if first_text is None:
         out[0].update(prefill_confidence="low", prefill_evidence="document not fetched")
         return out
-    company_name = str(first.get("company_name") or "")
+    company_name = filing_name(first)
     terms = extract_terms(first_text, filed=first_filed, subject_name=company_name, roster_names=roster_names)
     competing: Optional[str] = None
     if last is not first:

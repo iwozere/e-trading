@@ -908,6 +908,17 @@ use in the code/config; this section exists so they're all in one place to walk 
     (Alumis/ACELYRIN); differing acquirers in one cluster → `low` (Valeant hostile bid vs Actavis for
     Allergan); reject rows no longer carry the other deal's terms. Re-run on the cached trial filings:
     20/20 correct (5 `deal`, 13 `reject`, 2 left for a human).
+  - **Prod trial 2 2026-11-05 (`--limit 60`)**, 40 new deals; fixed the same day: de-SPAC S-4/DEFM14As
+    (`blank check company` ≥5× → `reject`), asset sales (`asset purchase agreement` dominant →
+    `asset_sale`: HOOKIPA/Gilead, Coherus/Intas), ADS prices (Verona $107/ADS, not $13.375/share),
+    subject name taken from `names_in_filing` at filing time (renamed reverse-merger shells: Graphite →
+    LENZ), past-tense voting-agreement stakes ignored, `(" Novartis ")` spaced quotes and inner
+    parentheticals, `(which we refer to as "BioMarin")`, "Eli Lilly and Company", PE/shell labels only
+    with a cash price (KKR as Jazz's selling holder), roster companies named in passing not taken as the
+    buyer. Cached re-run of both trials: 17 `deal`, 45 `reject`, 14 left blank of 80 deals.
+  - Still open: a cluster mixing two deals (Allergan) is not split; the `acquirer_name` of a reverse
+    merger is unreliable (CervoMed shows Vertex, a licensor) — informational only, `reverse_merger` is a
+    negative label; cash-and-stock deals leave `stock_consideration_pct` blank.
 - **FIXED 2026-11-05: entity-match queue re-asked reviewed aliases daily.** `run_alias_matching` only
   suppressed pairs with a PENDING item, and `match_alias` never reads `p22_company_alias`, so confirmed and
   rejected fuzzy aliases came back every run; 3,941 pending items covered 55 distinct pairs (most from

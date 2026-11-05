@@ -16,6 +16,7 @@ from src.ml.pipeline.p22_biotech_ma.ingest.deal_prefill import (
     extract_parties,
     extract_price,
     extract_terms,
+    filing_name,
     filing_text,
     name_key,
     pick_acquirer,
@@ -279,6 +280,58 @@ def test_prefill_cluster_competing_acquirers_left_for_human():
     assert rows[0]["prefill_confidence"] == "low"
     assert "acquirer differs" in rows[0]["prefill_evidence"]
     assert "action" not in rows[0]
+
+
+def test_extract_parties_handles_spaced_quotes_and_inner_parenthetical():
+    text = (
+        'the Agreement and Plan of Merger among Novartis AG, a company limited by shares ( Aktiengesellschaft ) '
+        'incorporated under the laws of Switzerland (" Novartis "), and BioMarin Pharmaceutical Inc., a Delaware '
+        'corporation (which we refer to as "BioMarin"), and LDH XV Corporation ("Purchaser") and Eli Lilly and Company ("Parent")'
+    )
+    parties = extract_parties(text)
+    assert parties["Novartis"] == "Novartis AG"
+    assert parties["BioMarin"] == "BioMarin Pharmaceutical Inc."
+    assert parties["Parent"] == "Eli Lilly and Company"
+
+
+def test_extract_price_prefers_ads_amount():
+    text = '$13.375 in cash per ordinary share. "ADS Consideration" means an amount per ADS equal to $107 in cash.'
+    assert extract_price(text) == 107.0
+
+
+def test_pick_acquirer_ignores_roster_company_named_in_passing():
+    parties = {"EIP": "EIP Pharma, Inc.", "Vertex": "Vertex Pharmaceuticals Incorporated", "Parent": "GSK plc"}
+    assert pick_acquirer(parties, "Diffusion Pharmaceuticals", ["Vertex Pharmaceuticals Inc"], mentions={"Vertex": 3}) == "GSK plc"
+    ultimate = {"Parent": "GlaxoSmithKline LLC", "Ultimate Parent": "GSK plc"}
+    assert pick_acquirer(ultimate, "RAPT Therapeutics", ["GSK plc"], mentions={"Ultimate Parent": 2}) == "GSK plc"
+
+
+def test_filing_name_uses_name_at_filing_time():
+    row = {"company_name": "LENZ THERAPEUTICS, INC.", "names_in_filing": "Graphite Bio, Inc.  (LENZ)  (CIK 0001815776)"}
+    assert filing_name(row) == "Graphite Bio, Inc."
+    assert filing_name({"company_name": "Pfizer Inc", "names_in_filing": ""}) == "Pfizer Inc"
+
+
+def test_extract_terms_holders_stake_skips_past_tense_voting_agreements():
+    text = (
+        "certain Graphite stockholders who in the aggregate owned approximately 52% signed support agreements. "
+        "Following the merger, pre-merger Graphite stockholders will own approximately 35% of the combined company."
+    )
+    terms = extract_terms(text, filed=date(2023, 12, 6), subject_name="Graphite Bio, Inc.")
+    assert terms.target_holders_pct is not None and abs(terms.target_holders_pct - 0.35) < 1e-9
+
+
+def test_suggest_deal_type_despac_asset_sale_and_pe_without_cash():
+    assert "SPAC" in (suggest_deal_type("S-4", DealTerms(is_despac=True))[1] or "")
+    assert suggest_deal_type("DEFM14A", DealTerms(is_asset_sale=True, acquirer_name="Gilead Sciences, Inc.")) == ("asset_sale", None)
+    assert suggest_deal_type("DEFM14A", DealTerms(acquirer_name="KKR JP LLC")) == (None, None)
+
+
+def test_extract_terms_detects_despac_and_asset_sale():
+    spac = "Data Knights is a blank check company. " * 5
+    sale = "The Asset Purchase Agreement with Gilead. " * 5
+    assert extract_terms(spac, filed=None, subject_name="Data Knights Acquisition Corp.").is_despac is True
+    assert extract_terms(sale, filed=None, subject_name="HOOKIPA Pharma Inc.").is_asset_sale is True
 
 
 def test_prefill_cluster_reject_clears_entry_fields():
