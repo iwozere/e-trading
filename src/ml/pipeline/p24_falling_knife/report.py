@@ -15,7 +15,8 @@ import numpy as np
 import pandas as pd
 
 from src.ml.pipeline.p24_falling_knife.backtest import FULL, HOLDOUT, TRAIN, UPPER_BOUND
-from src.ml.pipeline.p24_falling_knife.config import DAILY, WEEKLY, CostModel
+from src.ml.pipeline.p24_falling_knife.config import DAILY, WEEKLY, CostModel, PortfolioParams
+from src.ml.pipeline.p24_falling_knife.portfolio import simulate_portfolio
 from src.ml.pipeline.p24_falling_knife.validation import (
     bootstrap_ci,
     evaluate_gate,
@@ -142,6 +143,19 @@ def concentration_section(trades: pd.DataFrame) -> str:
     return f"Busiest months: {listing}; top-3 share of all trades {share:.1%}; max signals in one month {counts.max()}."
 
 
+def portfolio_section(trades: pd.DataFrame, params: PortfolioParams) -> str:
+    """Markdown: full system replayed through the slot-limited book (spec §6.3), per period."""
+    full = _clean(trades)[_clean(trades)["variant"] == FULL]
+    rows = []
+    for period, part in sorted(full.groupby("period")):
+        s = simulate_portfolio(part, params).summary()
+        rows.append([period, str(int(s["taken"])), str(int(s["skipped"])), str(int(s["max_concurrent"])),
+                     _fmt(s["total_return"]), _fmt(s["cagr"]), _fmt(s["max_drawdown"])])
+    note = (f"{params.max_positions} slots, equal weight, liquidity cap {params.liquidity_cap_frac:.0%} of 20-bar dollar "
+            "volume, cash earns 0; open positions carried at cost (realized drawdown).\n\n")
+    return note + _table(["period", "taken", "no slot", "max open", "total", "CAGR", "max DD"], rows) if rows else "No full-system trades."
+
+
 def gate_section(trades: pd.DataFrame, costs: CostModel) -> str:
     """Markdown: spec §11 gate on holdout trades, or a note that the holdout has not been run."""
     clean = _clean(trades)
@@ -154,13 +168,14 @@ def gate_section(trades: pd.DataFrame, costs: CostModel) -> str:
     return _table(["criterion", "result", "detail"], rows)
 
 
-def build_report(run_dir: Path, costs: CostModel) -> str:
+def build_report(run_dir: Path, costs: CostModel, portfolio: PortfolioParams = PortfolioParams()) -> str:
     """
     Assemble ``report.md`` for a run folder.
 
     Args:
         run_dir: Backtest run folder.
         costs: The run's 1× cost model.
+        portfolio: Portfolio-layer settings.
 
     Returns:
         Markdown text.
@@ -187,6 +202,7 @@ def build_report(run_dir: Path, costs: CostModel) -> str:
             "Cost sensitivity (full system, mean net)": cost_section(trades, costs),
             "Price buckets (full system)": bucket_section(trades),
             "Concentration (full system)": concentration_section(trades),
+            "Portfolio (full system)": portfolio_section(trades, portfolio),
             "Go/no-go gate (holdout)": gate_section(trades, costs),
         }
         parts.append(f"## {timeframe.capitalize()}\n\n{suspect} trade rows flagged `suspect_gap` were excluded.\n")

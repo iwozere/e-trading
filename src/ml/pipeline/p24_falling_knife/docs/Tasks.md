@@ -21,7 +21,7 @@
 - [x] M7 Book-example check (§7.6) — see spec §14.2
 - [x] M7 `chart.py` 4-panel charts + `run_p24_explain.py --chart-dir`
 - [ ] M7 20 sample charts in the report
-- [ ] M7 Portfolio layer (§6.3: max 20 positions, liquidity cap, daily marks)
+- [x] M7 Portfolio layer (§6.3) `portfolio.py` + report section (realized equity; daily marks still open)
 - [ ] Phase 2 (after gate): live scan, paper positions, notifications, signal-ledger harvester, `p24_specs.py`
 - [ ] Phase 3: index mode, multi-timeframe confirmation, on-the-way-down statistics
 
@@ -36,7 +36,7 @@
 - `JUMP_NO_SPLIT` + quiet-volume rule is a heuristic; a missing split traded on heavy volume would slip through.
 
 ## Testing Requirements
-- [x] Unit tests for every module (59 tests)
+- [x] Unit tests for every module (63 tests)
 - [ ] Truncation test on real vintage securities (currently synthetic + random-walk series)
 
 ## Documentation Updates
