@@ -59,7 +59,7 @@ REVERSE_MERGER_MAX_HOLDERS_PCT = 0.5
 PE_BUYERS = (
     "blackstone", "kkr", "kohlberg kravis", "eqt ", "bain capital", "carlyle", "tpg ", "patient square",
     "nordic capital", "apollo", "advent international", "hellman", "warburg pincus", "permira",
-    "thoma bravo", "gtcr", "water street", "avista", "novo holdings", "searchlight",
+    "thoma bravo", "gtcr", "water street", "avista", "novo holdings", "searchlight", "hillhouse",
 )
 SHELL_BUYERS = ("concentra biosciences", "tang capital", "xoma royalty", "xoma corporation")
 
@@ -71,7 +71,10 @@ _NOT_COUNTERPARTY = (
     "piper", "moelis", "perella", "citigroup", "barclays", "merrill", "credit suisse", "ubs", "wells fargo",
     "stifel", "raymond james", "wedbush", "oppenheimer", "wainwright", "ladenburg", "partners",
     "greenhill", "rothschild", "houlihan", "qatalyst", "pjt", "allen & company", "deutsche", "hsbc", "bofa",
-    "insurance corporation", "board of",
+    "insurance corporation", "board of", "appraisal", "advisory", "william blair", "sodali", "alliance advisors",
+    # law firms
+    " llp", "p.c.", "sonsini", "nautadutilh", "de brauw", "stibbe", "loyens", "houthoff", "freshfields",
+    "linklaters", "clifford chance", "slaughter and may", "allen & overy", "skadden", "wachtell",
 )
 _PARENT_LABELS = ("Parent", "Acquirer", "Acquiror", "Buyer", "Offeror", "Purchaser Parent")
 _SUB_LABELS = ("Purchaser", "Merger Sub", "Merger Subsidiary", "Sub", "Acquisition Sub", "Offeror Sub")
@@ -86,10 +89,17 @@ _MONTHS = "January|February|March|April|May|June|July|August|September|October|N
 _DATE = rf"(?:{_MONTHS})\s+\d{{1,2}},\s*\d{{4}}"
 _NUM = r"(\d{1,4}(?:,\d{3})*(?:\.\d{1,4})?)"
 
+_SIDE_AGREEMENT = (
+    r"(?:confidentiality|letter|support|advisory|exclusivity|voting|warrant purchase|note purchase|stock purchase"
+    r"|securities purchase|subscription|CVR|rights|employment|license|services|standstill|commitment|loan|credit)"
+    r"\s+agreement|offer to purchase"
+)
 _AGREEMENT_DATE_PATTERNS = (
     re.compile(
         rf"(?:Agreement and Plan of Merger|Merger Agreement|Transaction Agreement|Arrangement Agreement|Asset Purchase Agreement)"
-        rf"[^.;]{{0,120}}?dated\s+(?:as\s+of\s+)?({_DATE})",
+        # no side agreement in between: "Prior to signing the Merger Agreement, Decibel and Regeneron
+        # entered into a customary confidentiality agreement, dated June 30, 2023"
+        rf"(?:(?!{_SIDE_AGREEMENT})[^.;]){{0,120}}?dated\s+(?:as\s+of\s+)?({_DATE})",
         re.I,
     ),
     re.compile(
@@ -117,6 +127,12 @@ _PARTY_CUTS = (
 MIN_ACQUIRER_MENTIONS = 20  # a counterparty named without a Parent label must dominate the text
 # Most specific wording first: the first tier with any match decides the price. Generic "$X per share
 # in cash" also hits earlier proposals in the background section and CVR amounts, so it is a last resort.
+# Cash-only terms: "Merger Consideration" of a cash-and-stock deal is the total (Pharmacyclics: $261.25 of
+# which $152.25 cash), and "Purchase Price" is often an aggregate amount.
+_PRICE_TERM = (
+    r"(?:Offer Price|Cash Consideration|Closing Cash Consideration|Per Share Cash Consideration"
+    r"|Cash Merger Consideration|Cash Amount|Closing Amount)"
+)
 _PRICE_TIERS = (
     # ADS-listed companies (Verona, Centessa): prices in our data are per ADS, so the ADS amount wins.
     (
@@ -124,12 +140,22 @@ _PRICE_TIERS = (
         re.compile(rf"per\s+ADS\s+equal\s+to\s+\$\s?{_NUM}", re.I),
     ),
     (
-        re.compile(rf"\$\s?{_NUM}[^.$]{{0,40}}?per\s+share,?\s+net to the (?:seller|holder)s? in cash", re.I),
-        re.compile(rf"net to the (?:seller|holder)s? in cash(?:,)? equal to\s+\$\s?{_NUM}", re.I),
+        re.compile(rf"\$\s?{_NUM}[^.$]{{0,40}}?per\s+share,?\s+net to the (?:seller|holder|stockholder|shareholder)s? in cash", re.I),
+        re.compile(rf"net to the (?:seller|holder|stockholder|shareholder)s? in cash(?:,)? equal to\s+\$\s?{_NUM}", re.I),
+        # "$42.00 per Share, to be paid to the holder in cash" (Albireo/Ipsen)
+        re.compile(rf"\$\s?{_NUM}\s+per\s+share,?\s+to be paid to the (?:holder|stockholder|shareholder)s? in cash", re.I),
+        # the defined price term: "a per Share offer price of $23.50 (the "Offer Price")" (Assertio)
+        re.compile(rf"per\s+(?:share|ADS)\b[^.$\"]{{0,40}}?\$\s?{_NUM}[^.$\"]{{0,80}}?\(the\s+\"\s*{_PRICE_TERM}\s*\"\)", re.I),
+        re.compile(rf"\$\s?{_NUM}[^.$\"]{{0,40}}?per\s+(?:share|ADS)\b[^.$\"]{{0,80}}?\(the\s+\"\s*{_PRICE_TERM}\s*\"\)", re.I),
+        # "a price per Share equal to $6.00 net to the holder in cash" (Dimension/Ultragenyx)
+        re.compile(rf"\$\s?{_NUM}\s+net to the (?:seller|holder|stockholder|shareholder)s? in cash", re.I),
     ),
     (
         re.compile(rf"right to receive\s+(?:an amount in cash equal to\s+)?\$\s?{_NUM}\s*(?:per share\s+)?in cash", re.I),
         re.compile(rf"right to receive\s+\$\s?{_NUM}\s+in cash", re.I),
+        # enumerated merger consideration: "right to receive (i) $2.15, payable to the holder thereof in
+        # cash" (Paratek), "purchase all of the outstanding Shares in exchange for (i) $7.00 in cash per Share"
+        re.compile(rf"(?:right to receive|in exchange for)\s+\((?:i|a|x|1)\)\s+(?:an amount in cash equal to\s+)?\$\s?{_NUM}", re.I),
         # cash-and-stock merger consideration: "receive 0.2686 shares of LabCorp common stock and $75.76 in cash"
         re.compile(rf"(?:entitled to|right to|will) receive\s+(?:[^.$]|\.\d){{0,120}}?\$\s?{_NUM}\s+in cash", re.I),
     ),
@@ -143,9 +169,15 @@ _LEGAL_SUFFIX = re.compile(
     r"|SE|GmbH|S\.p\.A|B\.V|BV|KGaA|SAS|S\.A\.S|ULC|AB|A/S|ASA|Oyj|K\.K)\.?)$"
 )
 _CVR = re.compile(r"contingent value right", re.I)
+# Any mention, abbreviation included: the sentences whose amounts are CVR payments, not the upfront price.
+_CVR_MENTION = re.compile(r"contingent value right|\bCVRs?\b")
 _CVR_AMOUNTS = (
     re.compile(rf"up to\s+(?:an aggregate (?:amount )?of\s+)?\$\s?{_NUM}", re.I),
     re.compile(rf"\$\s?{_NUM}\s+(?:in cash\s+)?per\s+CVR", re.I),
+)
+_CVR_SENTENCE_AMOUNT = re.compile(
+    rf"(?:right to receive|contingent (?:cash )?payments? of)\s+(?:a contingent (?:cash )?payment of\s+)?(?:up to\s+)?\$\s?{_NUM}",
+    re.I,
 )
 _EXCHANGE_RATIO = re.compile(r"exchange ratio", re.I)
 _HOLDERS_PCT = re.compile(
@@ -162,6 +194,10 @@ _MINI_TENDER = re.compile(r"mini-tender", re.I)
 _SPAC = re.compile(r"blank check company|special purpose acquisition", re.I)
 _ASSET_SALE = re.compile(r"asset purchase agreement|asset sale proposal|sale of substantially all", re.I)
 DESPAC_MIN_MENTIONS = 5
+STOCK_DEAL_MIN_EXCHANGE_RATIOS = 10
+MAX_PRICE_PER_SHARE = 1000.0  # above this it is an aggregate, a per-100-shares example or a preferred share
+# Worked examples and preferred-stock terms: "if you own 1,000 shares ... you will receive $31,260 in cash".
+_ILLUSTRATION = re.compile(r"if you (?:own|hold)|for example|preferred stock", re.I)
 ASSET_SALE_MIN_MENTIONS = 5
 _REVERSE_MERGER_WORDS = re.compile(r"reverse merger", re.I)
 DEBT_EXCHANGE_MIN_NOTES = 100  # a registered debt exchange offer says "notes" hundreds of times ...
@@ -229,6 +265,31 @@ def _is_name_word(word: str) -> bool:
     return word[:1].isupper() or word[:1].isdigit() or word in _NAME_JOINERS or word.strip(".,").lower() in _NAME_SUFFIXES
 
 
+def _is_name_phrase(name: str) -> bool:
+    """Every word can sit inside a company name ("and" only before a capitalized word: "Eli Lilly and
+    Company", "King Kee Appraisal and Advisory Limited"), and no sentence break."""
+    words = name.split(" ")
+    if any(w.endswith(".") and len(w.strip(".")) > 3 and w.strip(".,").lower() not in _NAME_SUFFIXES for w in words[:-1]):
+        return False  # "Forecasts." ends a sentence; "F." / "Co." / "S.A." do not
+    if any(w.lower() == "the" for w in words[1:]):
+        return False  # "The Medicines Company", but not "Term Sheet On January 21, 2026, the Company"
+    return all(
+        _is_name_word(w) or (w == "and" and 0 < i < len(words) - 1 and words[i + 1][:1].isupper())
+        for i, w in enumerate(words)
+    )
+
+
+def _trim_to_label(name: str, label: str) -> str:
+    """Drop a lead-in joined by "of" before the label's word: label "Novogen", name "Extraordinary General
+    Meeting of Novogen Limited" -> "Novogen Limited". "F. Hoffmann-La Roche Ltd" (label "Roche") stays."""
+    first = label.split()[0]
+    words = name.split(" ")
+    for i in range(1, len(words)):
+        if words[i] == first and words[i - 1] == "of":
+            return " ".join(words[i:])
+    return name
+
+
 def _clean_party_name(raw: str, extra_cuts: Tuple[str, ...] = ()) -> str:
     """The company name at the end of the text preceding a `("Label")` / `which we refer to as` definition."""
     text = " " + raw.strip()
@@ -293,7 +354,9 @@ def _name_before(text: str, end: int, label: str) -> Optional[str]:
         words = match.group(0).split(" ")
         for n in range(len(words), 0, -1):
             candidate = " ".join(words[:n]).strip(" ,")
-            if _LEGAL_SUFFIX.search(candidate):
+            # Prose that happens to end in a suffix word is no name: "Merger Agreement, and in accordance
+            # with the General Corporation [Law]", "Financial Forecasts. Historically, the Company".
+            if _LEGAL_SUFFIX.search(candidate) and _is_name_phrase(candidate):
                 found = candidate
                 break
     return found
@@ -308,10 +371,12 @@ def extract_parties(text: str) -> Dict[str, str]:
         label = match.group(2).strip()
         name = _clean_party_name(match.group(1))
         if label and name_key(label) not in name.lower():
-            name = _name_before(text, match.start(), label) or name
+            name = _name_before(text, match.start(2), label) or name
+        name = _trim_to_label(name, label) if label else name
         if (
             label not in parties and 2 <= len(name) <= 120 and _LEGAL_SUFFIX.search(name)
-            and name[0].isupper() and ":" not in name and name != "Company"
+            and name[0].isupper() and ":" not in name and name_key(name)
+            and _is_name_phrase(name)  # not "Term Sheet On January 21, 2026, the Company"
         ):
             parties[label] = name
     # "X, which we refer to as Label" is used for parties only, so no legal suffix is required.
@@ -347,6 +412,7 @@ def pick_acquirer(
     others = {
         label: name for label, name in parties.items()
         if name_key(name) != subject and name_key(label) != subject and label not in _SUBJECT_LABELS
+        and subject not in re.findall(r"[a-z0-9]+", name.lower())  # "Liquidation of Footstar, Inc."
         and label not in _SUB_LABELS
         and "merger sub" not in name.lower()
     }
@@ -378,14 +444,24 @@ def extract_terms(text: str, *, filed: Optional[date], subject_name: str, roster
     cvr_matches = list(_CVR.finditer(text))
     terms.has_cvr = bool(cvr_matches)
     cvr_amounts: List[float] = []
+    cvr_spans: List[Tuple[int, int]] = []
     for match in cvr_matches[:20]:
         window = text[match.start():match.start() + 600]
         cvr_amounts.extend(_amount(m) for p in _CVR_AMOUNTS for m in p.finditer(window))
+        # Within the sentence that introduces the CVR, any "right to receive $X" is the CVR's amount:
+        # "one contingent value right (a "CVR"), which represents the right to receive $2.63 in cash".
+        cvr_amounts.extend(_amount(m) for m in _CVR_SENTENCE_AMOUNT.finditer(_sentence_from(window)))
+    if cvr_matches:
+        for match in _CVR_MENTION.finditer(text):
+            cvr_spans.append((match.start(), match.start() + len(_sentence_from(text[match.start():match.start() + 600]))))
     if cvr_amounts:
         terms.cvr_max_per_share = max(cvr_amounts)
-    terms.upfront_per_share = extract_price(text, exclude=set(cvr_amounts))
-
     has_exchange_ratio = bool(_EXCHANGE_RATIO.search(text))
+    terms.upfront_per_share = extract_price(
+        text, exclude=set(cvr_amounts), skip_spans=cvr_spans,
+        # a stock deal repeats its exchange ratio dozens of times; a cash deal may name one for options
+        generic_ok=len(_EXCHANGE_RATIO.findall(text)) < STOCK_DEAL_MIN_EXCHANGE_RATIOS,
+    )
     if terms.upfront_per_share is not None and not has_exchange_ratio:
         terms.stock_consideration_pct = 0.0
     elif terms.upfront_per_share is None and has_exchange_ratio:
@@ -413,18 +489,39 @@ def extract_terms(text: str, *, filed: Optional[date], subject_name: str, roster
     return terms
 
 
+def _sentence_from(window: str) -> str:
+    """`window` up to the end of its first sentence."""
+    return re.split(r"\.\s+(?=[A-Z])", window, maxsplit=1)[0]
+
+
 def _amount(match: "re.Match[str]") -> float:
     return float(match.group(1).replace(",", ""))
 
 
-def extract_price(text: str, exclude: Optional[set] = None) -> Optional[float]:
-    """Upfront cash per share: the most frequent amount in the first `_PRICE_TIERS` tier that matches.
-    `exclude` (CVR amounts) is dropped from the generic last tier only."""
+def extract_price(
+    text: str, exclude: Optional[set] = None, skip_spans: Iterable[Tuple[int, int]] = (), *, generic_ok: bool = True,
+) -> Optional[float]:
+    """
+    Upfront cash per share: the most frequent amount in the first `_PRICE_TIERS` tier that matches.
+
+    Amounts inside `skip_spans` (the sentences introducing a CVR: "one contingent value right, which
+    represents the right to receive $2.63 in cash") are dropped from every tier; `exclude` (CVR amounts)
+    only from the generic last tier — dropping them everywhere would lose an upfront price that happens
+    to equal the CVR (Regulus/Novartis: $7.00 plus a $7.00 CVR). `generic_ok=False` skips the generic
+    last tier — for a stock deal, whose only "$X per share in cash" is an earlier proposal (Aratana/Elanco).
+    """
+    spans = list(skip_spans)
     for tier_index, tier in enumerate(_PRICE_TIERS):
-        amounts = [_amount(m) for pattern in tier for m in pattern.finditer(text)]
+        amounts = [
+            _amount(m) for pattern in tier for m in pattern.finditer(text)
+            if not any(start <= m.start(1) < end for start, end in spans)
+            and not _ILLUSTRATION.search(text, max(0, m.start(1) - 150), m.start(1))
+        ]
+        if tier_index == len(_PRICE_TIERS) - 1 and not generic_ok:
+            break
         if tier_index == len(_PRICE_TIERS) - 1 and exclude:
             amounts = [a for a in amounts if a not in exclude]
-        amounts = [a for a in amounts if a > 0]
+        amounts = [a for a in amounts if 0 < a < MAX_PRICE_PER_SHARE]
         if amounts:
             return Counter(amounts).most_common(1)[0][0]
     return None

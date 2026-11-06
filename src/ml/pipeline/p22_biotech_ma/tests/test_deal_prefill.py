@@ -339,3 +339,142 @@ def test_prefill_cluster_reject_clears_entry_fields():
     rows = prefill_cluster(cluster, lambda r: _TENDER)
     assert rows[0]["action"] == "reject" and "acquirer" in rows[0]["note"]
     assert rows[0]["acquirer_name"] == "" and rows[0]["upfront_per_share"] == ""
+
+
+def test_extract_parties_rejects_prose_ending_in_suffix_word():
+    text = (
+        'the separate corporate existence of Merger Sub will cease. Merger Agreement, and in accordance with the '
+        'General Corporation ("Merger") law. Financial Forecasts. Historically, the Company ("Financial Forecasts") '
+        'did not publish forecasts.'
+    )
+    parties = extract_parties(text)
+    assert "Merger" not in parties and "Financial Forecasts" not in parties
+
+
+def test_extract_parties_trims_lead_in_before_label_word():
+    text = 'the Extraordinary General Meeting of Novogen Limited ("Novogen") and F. Hoffmann-La Roche Ltd ("Roche")'
+    parties = extract_parties(text)
+    assert parties["Novogen"] == "Novogen Limited"
+    assert parties["Roche"] == "F. Hoffmann-La Roche Ltd"
+
+
+def test_extract_price_excludes_cvr_amount_from_right_to_receive_tier():
+    text = (
+        'converted into the right to receive (a) $4.46 in cash, without interest, and one contingent value right '
+        '(a "CVR"), which represents the right to receive $2.63 in cash upon the milestone. Each CVR represents '
+        'the right to receive $2.63 in cash. An amount of $2.63 in cash per CVR will be paid.'
+    )
+    terms = extract_terms(text, filed=date(2018, 6, 25), subject_name="SteadyMed Ltd.")
+    assert terms.cvr_max_per_share == 2.63 and terms.upfront_per_share == 4.46
+
+
+def test_extract_price_reads_amount_net_to_the_holder():
+    text = (
+        'Ultragenyx intended to acquire Dimension for $5.50 per Share in cash. Purchaser offered to purchase all '
+        'Shares at a price per Share equal to $6.00 net to the holder in cash (the "Offer Price").'
+    )
+    assert extract_price(text) == 6.0
+
+
+def test_extract_agreement_date_skips_dates_of_other_agreements():
+    text = (
+        "Prior to signing the Merger Agreement, Decibel and Regeneron entered into a customary confidentiality "
+        "agreement, dated June 30, 2023. Prior to signing the Merger Agreement, they entered into a letter "
+        "agreement, dated June 30, 2023. The Merger Agreement, dated August 8, 2023, among Decibel and Regeneron."
+    )
+    assert extract_agreement_date(text, filed=date(2023, 8, 25)) == date(2023, 8, 8)
+
+
+def test_extract_agreement_date_keeps_merger_agreement_restated_by_definition():
+    text = (
+        '"Transaction Agreement" means the Business Combination Agreement, dated as of July 11, 2025. The merger '
+        'agreement will refer to the Agreement and Plan of Reorganization, dated as of July 11, 2025.'
+    )
+    assert extract_agreement_date(text, filed=date(2025, 9, 1)) == date(2025, 7, 11)
+
+
+def test_extract_terms_reads_cvr_amount_stated_as_contingent_payment():
+    text = (
+        'converted into the right to receive (i) $8.00 in cash, plus (ii) one contingent value right ("CVR") '
+        'representing the right to receive a contingent payment of $2.00, net to the holder in cash. Each CVR '
+        'will represent the right to receive a contingent payment of $2.00, net to the holder in cash.'
+    )
+    terms = extract_terms(text, filed=date(2025, 6, 1), subject_name="Vigil Neuroscience, Inc.")
+    assert terms.upfront_per_share == 8.0 and terms.cvr_max_per_share == 2.0
+
+
+def test_pick_acquirer_skips_names_containing_the_subject():
+    parties = {"Plan of Dissolution": "Liquidation of Footstar, Inc.", "King Kee": "King Kee Appraisal and Advisory Limited"}
+    assert pick_acquirer(parties, "FOOTSTAR INC", allow_any_party=True) is None
+
+
+def test_extract_parties_keeps_and_between_capitalized_name_words():
+    text = 'the TTNP Board engaged King Kee Appraisal and Advisory Limited (" King Kee ") for an opinion'
+    assert extract_parties(text)["King Kee"] == "King Kee Appraisal and Advisory Limited"
+
+
+def test_extract_terms_keeps_upfront_price_equal_to_cvr_amount():
+    text = (
+        'each Share will be converted into the right to receive $7.00 in cash, plus one contingent value right '
+        '(a "CVR") representing the right to receive $7.00 in cash upon the milestone. The right to receive $7.00 '
+        'in cash at closing.'
+    )
+    terms = extract_terms(text, filed=date(2024, 5, 1), subject_name="Regulus Therapeutics Inc.")
+    assert terms.upfront_per_share == 7.0 and terms.cvr_max_per_share == 7.0
+
+
+def test_extract_parties_rejects_prose_and_law_firms_as_buyers():
+    text = (
+        'Term Sheet On January 21, 2026, the Company ("Term Sheet") was signed. Wilson Sonsini Goodrich & Rosati, '
+        'P.C. ("Wilson Sonsini") advised. Sanofi Inc. ("Parent")'
+    )
+    parties = extract_parties(text)
+    assert "Term Sheet" not in parties
+    assert pick_acquirer(parties, "Forte Biosciences", mentions={"Wilson Sonsini": 50, "Parent": 1}) == "Sanofi Inc."
+
+
+def test_extract_price_reads_enumerated_merger_consideration():
+    paratek = (
+        'Gurnet Point proposed to acquire all Shares for $2.55 per Share, payable in cash. Each share will be '
+        'converted into the right to receive (i) $2.15, payable to the holder thereof in cash, without interest.'
+    )
+    assert extract_price(paratek) == 2.15
+    regulus = 'Party A proposed $2.50 per share in cash. Novartis will purchase all Shares in exchange for (i) $7.00 in cash per Share'
+    assert extract_price(regulus) == 7.0
+
+
+def test_extract_terms_stock_deal_ignores_cash_proposal_price():
+    text = (
+        'Elanco proposed to purchase all shares at a price between $5.67 per share and $6.21 per share, in cash. '
+        'Each share will be converted into Elanco common stock at the exchange ratio. ' * 10
+    )
+    terms = extract_terms(text, filed=date(2019, 6, 1), subject_name="Aratana Therapeutics, Inc.")
+    assert terms.upfront_per_share is None and terms.stock_consideration_pct == 1.0
+
+
+def test_extract_price_reads_net_to_the_stockholder_over_earlier_proposal():
+    text = (
+        'Parent proposed to acquire the Company in exchange for (i) $12.00 of cash per share and (ii) a CVR. '
+        'Purchaser offered to purchase all Shares for (i) a purchase price of $25.00 per Share, net to the '
+        'stockholder in cash, without interest.'
+    )
+    assert extract_price(text) == 25.0
+
+
+def test_extract_price_reads_defined_offer_price_term():
+    text = (
+        'Garda proposed to acquire Assertio for $21.80 per share in cash. The Schedule TO relates to the tender '
+        'offer to purchase all Shares at a per Share offer price of $23.50 (the " Offer Price "), payable in cash.'
+    )
+    assert extract_price(text) == 23.5
+    albireo = 'Ipsen offered $42.00 per Share in cash at closing. The offer is for (i) $42.00 per Share, to be paid to the holder in cash'
+    assert extract_price(albireo) == 42.0
+
+
+def test_extract_price_ignores_worked_examples_and_preferred_shares():
+    text = (
+        'Each Share will be converted into the right to receive $31.26 in cash. For example, if you own 1,000 shares '
+        'of Company Common Stock, you will receive $31,260 in cash. Holders of preferred stock receive $1,400.00 per '
+        'share in cash.'
+    )
+    assert extract_price(text) == 31.26

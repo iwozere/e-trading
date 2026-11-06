@@ -916,6 +916,18 @@ use in the code/config; this section exists so they're all in one place to walk 
     parentheticals, `(which we refer to as "BioMarin")`, "Eli Lilly and Company", PE/shell labels only
     with a cash price (KKR as Jazz's selling holder), roster companies named in passing not taken as the
     buyer. Cached re-run of both trials: 17 `deal`, 45 `reject`, 14 left blank of 80 deals.
+  - **Full prod run 2026-11-05** (808 deals: 321 `deal`, 216 `reject`, 271 blank), checked by re-running
+    the new code offline on all 1,326 cached filings and diffing against the Pi CSV (55 clusters changed,
+    every change verified against the filing text). Fixed: CVR payments read as the upfront price
+    (SteadyMed $2.63 → $4.46, Furiex $30 → $95, Dyax, Inhibrx, Mirati, Albireo, CinCor) — amounts inside
+    a CVR's sentence are skipped, and an upfront equal to the CVR (Regulus $7 + $7) is kept; new price
+    wordings ("net to the stockholder", "to be paid to the holder", "right to receive (i) $X", a per-share
+    `(the "Offer Price")` definition); stock deals (exchange ratio ≥10×) ignore the generic cash tier,
+    whose only hits are earlier proposals (Aratana); worked examples and preferred shares ("if you own
+    1,000 shares ... $31,260") and anything ≥ $1,000/share dropped; the agreement date skips side
+    agreements (Decibel's June 30 confidentiality agreement); prose ending in a suffix word, names with
+    an inner "the", law firms, banks and proxy solicitors are no longer buyers; "... Meeting of Novogen
+    Limited" → "Novogen Limited"; Hillhouse is a PE buyer.
   - Still open: a cluster mixing two deals (Allergan) is not split; the `acquirer_name` of a reverse
     merger is unreliable (CervoMed shows Vertex, a licensor) — informational only, `reverse_merger` is a
     negative label; cash-and-stock deals leave `stock_consideration_pct` blank.
