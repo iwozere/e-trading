@@ -7,7 +7,7 @@ Coordinates all pipeline stages:
   Stage 3: Technical indicator computation  (TechnicalAgent)
   Stage 4: Short squeeze enrichment         (ShortSqueezeAgent)
   Stage 5: Dilution risk detection          (DilutionAgent)
-  Stage 6: Composite scoring + tier assign  (ScoringAgent)
+  Stage 6: Composite scoring + tier assign  (ScoringAgent; extension gate + setup score)
   Stage 7: Report generation                (ReportingAgent)
 
 Each stage is wrapped in _run_job() for isolated error handling — a single
@@ -243,6 +243,8 @@ class P17Pipeline:
                 "tier_b": sum(1 for c in candidates if c.tier == "B"),
                 "tier_c": sum(1 for c in candidates if c.tier == "C"),
                 "explosive": sum(1 for c in candidates if c.explosive_candidate),
+                "extended": sum(1 for c in candidates if c.extended),
+                "setup": sum(1 for c in candidates if c.setup_candidate),
             }
 
         job_results["scoring"] = self._run_job("Stage6 Scoring", stage6)
@@ -267,12 +269,14 @@ class P17Pipeline:
         _logger.info("=" * 70)
         _logger.info("P17 Pipeline Completed in %.1fs", elapsed)
         _logger.info(
-            "Result: %d candidates | A=%d B=%d C=%d | explosive=%d",
+            "Result: %d candidates | A=%d B=%d C=%d | explosive=%d | extended=%d | setups=%d",
             len(candidates),
             report_meta.get("tier_a", 0),
             report_meta.get("tier_b", 0),
             report_meta.get("tier_c", 0),
             report_meta.get("explosive", 0),
+            report_meta.get("extended", 0),
+            report_meta.get("setup", 0),
         )
         _logger.info("=" * 70)
 

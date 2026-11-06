@@ -65,6 +65,13 @@ def test_p17_ranked_by_final_score_with_tier(tmp_path: Path) -> None:
     assert [(r.ticker, r.rank, r.meta) for r in records] == [("BBB", 1, {"tier": "A"}), ("AAA", 2, {"tier": "C"})]
 
 
+def test_p17_setup_flag_kept_in_meta(tmp_path: Path) -> None:
+    _write(tmp_path / "p17_penny_stocks/2026-10-20/2026-10-20_candidates.csv",
+           "ticker,final_score,tier,setup_candidate\nAAA,50,C,True\nBBB,80,A,False\n")
+    records = harvest_p17(tmp_path, None)
+    assert {r.ticker: r.meta for r in records} == {"AAA": {"tier": "C", "setup": True}, "BBB": {"tier": "A"}}
+
+
 def test_p19_first_alert_per_ticker_day_for_momentum_tiers(tmp_path: Path) -> None:
     db = tmp_path / "p19_penny_intraday/shadow.sqlite"
     db.parent.mkdir(parents=True)

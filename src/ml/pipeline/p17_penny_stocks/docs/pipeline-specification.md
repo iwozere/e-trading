@@ -716,6 +716,44 @@ Tier-W tickers appear in the daily report's "Watching" section but do NOT trigge
 
 ---
 
+## 11.1 Extension Gate (added 2026-11-06)
+
+Prod history May–Nov 2026: Tier A/B/explosive signals fired at a median **+43% 5-day
+run-up** and then lost a median **9% over the next 10 sessions** (entry at next open).
+The mandatory conditions (§10) describe the breakout day itself, so the screen was
+alerting after the move.
+
+A candidate is `extended` when:
+
+```yaml
+price_5d_return > 0.30            # max_alert_5d_return
+OR (close - SMA20) / ATR14 > 3.0  # max_alert_extension_atr
+```
+
+Extended candidates are capped at Tier C (so they stay on the P19 intraday watchlist)
+and are never EXPLOSIVE; the signal `extended_5d_<ret>_<atr>atr` is attached.
+
+Replay (`replay.py`, 112 prod runs, same fresh OHLCV both sides): gate off → 59 episodes,
+fwd10 median −8.0% / win 34%; gate on → 20 episodes, fwd10 median +0.4% / mean +4.0% /
+win 53%. Improvement held in both halves of the period. Universe baseline fwd10 median −3.6%.
+
+## 11.2 Pre-breakout Setup — shadow mode (added 2026-11-06)
+
+"Coiled, not yet moved" score (0–100): coil 0.30 (tight 10d range, BB squeeze bonus),
+proximity to the prior 50d high 0.25, early volume pickup (rvol 1.3–2.0) 0.20,
+accumulation 0.15, short-squeeze fuel 0.10. `setup_candidate` requires score ≥ 60,
+5d return ≤ 15%, 20d return in [−15%, +30%], within 15% below the 50d high,
+rvol ≤ 4, dilution penalty ≤ 30, not extended.
+
+**Status: shadow.** Written to the CSV / JSON / Markdown report and tracked by the
+signal ledger (`p17_setup` stream) but NOT emailed. Replay showed no edge: 59 episodes,
+fwd10 median −2.2% (universe −3.6%), sign flipped between halves, only 7/59 later jump
+episodes were preceded by a setup flag, and setups jumped +20% within 10 days less
+often than the universe (14.6% vs 19.1%). Daily-bar coil features do not anticipate
+penny-stock jumps; thresholds were not tuned on this data.
+
+---
+
 # 12. Output Report
 
 Generate:

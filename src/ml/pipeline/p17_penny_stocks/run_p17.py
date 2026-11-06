@@ -87,6 +87,8 @@ def main() -> int:
             "tier_b_count": result.get("tier_b", 0),
             "tier_c_count": result.get("tier_c", 0),
             "explosive_count": result.get("explosive", 0),
+            "extended_count": result.get("extended", 0),
+            "setup_count": result.get("setup", 0),
             "results_dir": str(results_dir),
             "timestamp": datetime.now(UTC).isoformat(),
         }

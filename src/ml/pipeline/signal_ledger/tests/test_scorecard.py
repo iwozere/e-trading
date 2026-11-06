@@ -58,6 +58,12 @@ def test_sub_stream_tier_ab_is_carved_out_of_p17() -> None:
     assert streams == {"p17_candidates": 10, "p17_tier_ab": 5}
 
 
+def test_sub_stream_setup_is_carved_out_of_p17() -> None:
+    rows = [_row("p17_candidates", d, 0.0, meta={"tier": "C", "setup": d < 3}) for d in range(10)]
+    streams = {s["stream"]: s["signals"] for s in build_scorecard(rows)}
+    assert streams == {"p17_candidates": 10, "p17_setup": 3}
+
+
 def test_flagged_rows_are_excluded() -> None:
     rows = [_row("p19_momentum_alerts", d, 0.0) for d in range(5)] + [{**_row("p19_momentum_alerts", 9, 50.0), "data_flag": "price_jump"}]
     h20 = next(h for h in build_scorecard(rows)[0]["horizons"] if h["horizon"] == 20)

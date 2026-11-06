@@ -18,7 +18,7 @@ import re
 import sqlite3
 from datetime import date
 from pathlib import Path
-from typing import Callable, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 import pandas as pd
 
@@ -56,6 +56,13 @@ def _optional_float(value: object) -> Optional[float]:
     except (TypeError, ValueError):
         return None
     return None if pd.isna(number) else number
+
+
+def _truthy(value: object) -> bool:
+    """CSV boolean cell (bool, or "True"/"true"/"1" text) → bool; blanks/NaN → False."""
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("true", "1")
 
 
 def dated_files(pipeline_dir: Path, pattern: str, since: Optional[date]) -> Iterator[Tuple[date, Path]]:
@@ -170,10 +177,13 @@ def harvest_p17(results_root: Path, since: Optional[date]) -> List[SignalRecord]
             if not ticker:
                 continue
             tier = row.get("tier")
+            meta: Dict[str, Any] = {"tier": tier} if isinstance(tier, str) else {}
+            if _truthy(row.get("setup_candidate")):
+                meta["setup"] = True
             records.append(SignalRecord(
                 pipeline="p17", source="p17_candidates", signal_date=day, ticker=ticker, rank=position,
                 score=_optional_float(row.get("final_score")),
-                meta={"tier": tier} if isinstance(tier, str) else {},
+                meta=meta,
             ))
     return records
 

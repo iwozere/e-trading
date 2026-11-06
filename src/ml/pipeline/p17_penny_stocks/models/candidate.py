@@ -49,6 +49,11 @@ class Candidate:
     obv_slope: float = 0.0  # OBV linear regression slope (positive = accumulation)
     accumulation_days: int = 0  # high-volume green days in last 20 sessions
 
+    # ── Pre-breakout setup features ────────────────────────────────────────
+    dist_to_50d_high: float = 0.0  # close / prior 50-session high − 1 (negative = below the high)
+    extension_atr: float = 0.0  # (close − SMA20) / ATR — how stretched above the mean
+    range_10d_pct: float = 0.0  # (10-session high − low) / close — coil tightness
+
     # ── Short squeeze ──────────────────────────────────────────────────────
     short_interest_pct_float: float | None = None
     days_to_cover: float | None = None
@@ -86,6 +91,11 @@ class Candidate:
     explosive_candidate: bool = False
     signals: List[str] = field(default_factory=list)
 
+    # ── Extension gate + pre-breakout setup ────────────────────────────────
+    extended: bool = False  # move already happened → never Tier A/B or explosive
+    setup_score: float = 0.0  # 0–100 "coiled but not yet moved" score
+    setup_candidate: bool = False  # passes all setup gates → pre-breakout watchlist
+
     # ── Metadata ───────────────────────────────────────────────────────────
     data_as_of: datetime | None = None
     run_date: str = ""
@@ -118,6 +128,9 @@ class Candidate:
             "atr_pct": round(self.atr_pct, 4),
             "obv_slope": round(self.obv_slope, 4),
             "accumulation_days": self.accumulation_days,
+            "dist_to_50d_high": round(self.dist_to_50d_high, 4),
+            "extension_atr": round(self.extension_atr, 2),
+            "range_10d_pct": round(self.range_10d_pct, 4),
             "short_interest_pct_float": self.short_interest_pct_float,
             "days_to_cover": self.days_to_cover,
             "finra_short_vol_ratio": self.finra_short_vol_ratio,
@@ -140,6 +153,9 @@ class Candidate:
             "final_score": round(self.final_score, 1),
             "tier": self.tier,
             "explosive_candidate": self.explosive_candidate,
+            "extended": self.extended,
+            "setup_score": round(self.setup_score, 1),
+            "setup_candidate": self.setup_candidate,
             "signals": "|".join(self.signals),
             "run_date": self.run_date,
         }

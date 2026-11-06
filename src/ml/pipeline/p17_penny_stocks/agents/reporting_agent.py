@@ -90,6 +90,8 @@ class ReportingAgent:
             "tier_c": tier_counts.get("C", 0),
             "tier_w": tier_counts.get("W", 0),
             "explosive": sum(1 for c in candidates if c.explosive_candidate),
+            "extended": sum(1 for c in candidates if c.extended),
+            "setup": sum(1 for c in candidates if c.setup_candidate),
             "fear_greed_score": fg_context.get("score") if fg_context else None,
             "fear_greed_label": fg_context.get("label") if fg_context else None,
             "csv_path": str(csv_path),
@@ -120,6 +122,8 @@ class ReportingAgent:
                 "total_candidates": len(candidates),
                 **self._tier_counts(candidates),
                 "explosive_count": sum(1 for c in candidates if c.explosive_candidate),
+                "extended_count": sum(1 for c in candidates if c.extended),
+                "setup_count": sum(1 for c in candidates if c.setup_candidate),
             },
             "top_candidates": [self._candidate_to_json(c) for c in top],
         }
@@ -147,6 +151,9 @@ class ReportingAgent:
             ),
             "revenue_growth_pct": (round(c.revenue_growth_yoy * 100, 1) if c.revenue_growth_yoy is not None else None),
             "dilution_penalty": c.dilution_penalty,
+            "extended": c.extended,
+            "setup_score": round(c.setup_score, 1),
+            "setup_candidate": c.setup_candidate,
             "signals": c.signals,
             "score_breakdown": c.score_breakdown(),
         }
@@ -159,6 +166,8 @@ class ReportingAgent:
         tier_a = [c for c in candidates if c.tier == "A"]
         tier_b = [c for c in candidates if c.tier == "B"][:5]
         tier_c = [c for c in candidates if c.tier == "C"][:5]
+        setups = sorted((c for c in candidates if c.setup_candidate), key=lambda c: c.setup_score, reverse=True)
+        extended = [c for c in candidates if c.extended]
 
         fg_row = ""
         if fg_context:
@@ -178,6 +187,8 @@ class ReportingAgent:
             f"| Tier B (momentum) | {tiers.get('B', 0)} |",
             f"| Tier C (speculative) | {tiers.get('C', 0)} |",
             f"| Explosive candidates | {len(explosive)} |",
+            f"| Extended (gated out of A/B) | {len(extended)} |",
+            f"| Pre-breakout setups (shadow) | {len(setups)} |",
         ]
         if fg_row:
             lines.append(fg_row)
@@ -210,6 +221,16 @@ class ReportingAgent:
         if tier_c:
             lines += ["## Tier C — Speculative (top 5)", ""]
             lines += self._candidate_table(tier_c)
+            lines.append("")
+
+        if setups:
+            lines += [
+                "## Pre-breakout Setups — shadow mode (top 10)",
+                "",
+                "> Experimental: not emailed. Replay over May–Nov 2026 showed no edge yet; tracked by the signal ledger.",
+                "",
+            ]
+            lines += self._candidate_table(setups[:10])
             lines.append("")
 
         # Risk warnings

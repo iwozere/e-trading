@@ -30,6 +30,7 @@ T_THRESHOLD = 2.0
 Predicate = Callable[[Mapping[str, Any]], bool]
 SUB_STREAMS: Dict[str, tuple[str, Predicate]] = {
     "p17_tier_ab": ("p17_candidates", lambda row: (row.get("meta") or {}).get("tier") in ("A", "B")),
+    "p17_setup": ("p17_candidates", lambda row: bool((row.get("meta") or {}).get("setup"))),
 }
 
 

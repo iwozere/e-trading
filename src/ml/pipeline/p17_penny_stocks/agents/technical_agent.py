@@ -10,6 +10,7 @@ Computes all technical indicators from daily OHLCV data:
   - ATR (Average True Range) as % of price
   - OBV slope (accumulation proxy)
   - Accumulation day count (high-volume green days)
+  - Pre-breakout setup: distance to 50d high, ATR extension over SMA20, 10d range
 
 All indicators are computed using pure pandas/numpy — no TA-Lib dependency.
 """
@@ -136,11 +137,15 @@ class TechnicalAgent:
                 c.bb_squeeze = bb_width < self.config.bb_squeeze_width_pct
 
         # ── ATR as % of price ──────────────────────────────────────────────
+        atr = 0.0
         atr_len = min(self.config.atr_period, n - 1)
         if atr_len >= 5:
             tr = self._true_range(high, low, close)
             atr = float(np.array(tr.rolling(atr_len).mean(), dtype=float)[-1])
             c.atr_pct = atr / current_price if current_price > 0 else 0.0
+
+        # ── Pre-breakout setup features ────────────────────────────────────
+        self._setup_features(c, high_arr, low.to_numpy(dtype=float), current_price, atr, lb50)
 
         # ── OBV slope ─────────────────────────────────────────────────────
         if n >= 10:
@@ -157,6 +162,43 @@ class TechnicalAgent:
             green = close_arr[-lookback_acc:] > open_arr[-lookback_acc:]
             high_vol = volume_arr[-lookback_acc:] > avg_vol_acc
             c.accumulation_days = int((green & high_vol).sum())
+
+    def _setup_features(
+        self,
+        c: Candidate,
+        high_arr: np.ndarray,
+        low_arr: np.ndarray,
+        current_price: float,
+        atr: float,
+        lb50: int,
+    ) -> None:
+        """
+        Populate the "coiled, not yet moved" features used by the setup score.
+
+        Args:
+            c: Candidate to enrich (``sma20`` must already be set).
+            high_arr: Daily highs, oldest first, ending with the signal day.
+            low_arr: Daily lows aligned with ``high_arr``.
+            current_price: Signal-day close.
+            atr: ATR in price units (0 when unavailable).
+            lb50: Breakout lookback actually available (≤ 50 sessions).
+        """
+        if current_price <= 0:
+            return
+
+        if lb50 > 1:
+            prior_high = float(high_arr[-(lb50 + 1) : -1].max())
+            if prior_high > 0:
+                c.dist_to_50d_high = current_price / prior_high - 1.0
+
+        if atr > 0 and c.sma20 > 0:
+            c.extension_atr = (current_price - c.sma20) / atr
+
+        range_len = min(self.config.setup_range_days, len(high_arr))
+        if range_len >= 5:
+            window_high = float(high_arr[-range_len:].max())
+            window_low = float(low_arr[-range_len:].min())
+            c.range_10d_pct = (window_high - window_low) / current_price
 
     # ── Helpers ────────────────────────────────────────────────────────────
 
@@ -227,6 +269,9 @@ class TechnicalAgent:
                 "atr_pct": round(c.atr_pct, 4),
                 "obv_slope": round(c.obv_slope, 4),
                 "accum_days": c.accumulation_days,
+                "dist_50d_high": round(c.dist_to_50d_high, 4),
+                "ext_atr": round(c.extension_atr, 2),
+                "range_10d": round(c.range_10d_pct, 4),
             }
             for c in candidates
         ]

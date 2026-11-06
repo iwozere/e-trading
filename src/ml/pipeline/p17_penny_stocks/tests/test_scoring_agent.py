@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -268,3 +270,118 @@ def test_run_returns_same_list():
     candidates = [_make_candidate(ticker="X")]
     result = agent.run(candidates)
     assert result is candidates
+
+
+# ── Extension gate ─────────────────────────────────────────────────────────────
+
+
+def _squeeze_agent() -> ScoringAgent:
+    agent = _make_agent()
+    ss = MagicMock()
+    ss.compute_score.return_value = 100.0
+    agent._ss_agent = ss
+    return agent
+
+
+def _tier_a_candidate(**kwargs: Any) -> Candidate:
+    base: Dict[str, Any] = dict(
+        relative_volume=5.0,
+        price_20d_return=0.50,
+        above_sma50=True,
+        breakout_20d=True,
+        revenue_growth_yoy=0.50,
+    )
+    base.update(kwargs)
+    return _make_candidate(**base)
+
+
+def test_extended_5d_return_demotes_tier_a_to_c():
+    agent = _squeeze_agent()
+    c = _tier_a_candidate(price_5d_return=0.45)
+    agent._score(c)
+    assert c.extended
+    assert c.tier == "C"
+    assert not c.explosive_candidate
+    assert any(s.startswith("extended_5d_") for s in c.signals)
+
+
+def test_extended_atr_stretch_demotes_tier_a_to_c():
+    agent = _squeeze_agent()
+    c = _tier_a_candidate(price_5d_return=0.10, extension_atr=3.5)
+    agent._score(c)
+    assert c.extended and c.tier == "C"
+
+
+def test_not_extended_keeps_tier_a():
+    agent = _squeeze_agent()
+    c = _tier_a_candidate(price_5d_return=0.10, extension_atr=2.0)
+    agent._score(c)
+    assert not c.extended and c.tier == "A"
+
+
+def test_extended_low_score_is_not_promoted():
+    agent = _make_agent()
+    c = _make_candidate(price_5d_return=0.60)
+    agent._score(c)
+    assert c.extended and c.tier == "W"
+
+
+# ── Pre-breakout setup ─────────────────────────────────────────────────────────
+
+
+def _coiled(**kwargs: Any) -> Candidate:
+    base: Dict[str, Any] = dict(
+        relative_volume=2.0,
+        price_5d_return=0.02,
+        price_20d_return=0.05,
+        range_10d_pct=0.10,
+        dist_to_50d_high=-0.02,
+        bb_squeeze=True,
+        accumulation_days=7,
+        obv_slope=0.2,
+    )
+    base.update(kwargs)
+    return _make_candidate(**base)
+
+
+def test_setup_flags_tight_coil_near_high():
+    agent = _squeeze_agent()
+    c = _coiled()
+    agent._score(c)
+    assert c.setup_score >= 90.0
+    assert c.setup_candidate
+    assert any(s.startswith("setup_") for s in c.signals)
+
+
+def test_setup_rejected_when_already_moving():
+    agent = _squeeze_agent()
+    c = _coiled(price_5d_return=0.20)
+    agent._score(c)
+    assert not c.setup_candidate
+
+
+def test_setup_rejected_far_below_high():
+    agent = _squeeze_agent()
+    c = _coiled(dist_to_50d_high=-0.30)
+    agent._score(c)
+    assert not c.setup_candidate
+
+
+def test_setup_rejected_on_heavy_dilution():
+    agent = _squeeze_agent()
+    c = _coiled(dilution_penalty=40.0)
+    agent._score(c)
+    assert not c.setup_candidate
+
+
+def test_setup_requires_ohlcv_features():
+    """No OHLCV (range 0) → no evidence of a coil, never a setup."""
+    agent = _squeeze_agent()
+    c = _coiled(range_10d_pct=0.0)
+    agent._score(c)
+    assert c.setup_score < 60.0 and not c.setup_candidate
+
+
+def test_setup_weights_must_sum_to_one():
+    with pytest.raises(ValueError):
+        P17ScoringConfig(setup_weight_coil=0.5)

@@ -9,6 +9,9 @@ Computes the final composite score for each candidate:
   5. Assign tier: A | B | C | W
   6. Mark explosive_candidate flag
   7. Collect human-readable signals list
+  8. Extension gate: a candidate whose move already happened (5d return or ATR
+     stretch over SMA20 above limits) is capped at Tier C and never EXPLOSIVE
+  9. Setup score: "coiled, not yet moved" pre-breakout watchlist flag
 
 Sub-score thresholds (0 / 50 / 100):
   momentum      −20% / 0% / +50%  (20d return)
@@ -81,12 +84,14 @@ class ScoringAgent:
             tier_counts[c.tier] = tier_counts.get(c.tier, 0) + 1
 
         _logger.info(
-            "Scoring complete: A=%d B=%d C=%d W=%d (total=%d)",
+            "Scoring complete: A=%d B=%d C=%d W=%d (total=%d) | extended=%d setups=%d",
             tier_counts.get("A", 0),
             tier_counts.get("B", 0),
             tier_counts.get("C", 0),
             tier_counts.get("W", 0),
             len(candidates),
+            sum(1 for c in candidates if c.extended),
+            sum(1 for c in candidates if c.setup_candidate),
         )
         return candidates
 
@@ -115,8 +120,11 @@ class ScoringAgent:
 
         c.final_score = max(0.0, c.weighted_score - c.dilution_penalty)
 
+        c.extended = self._is_extended(c)
         c.tier = self._assign_tier(c)
         c.explosive_candidate = self._is_explosive(c)
+        c.setup_score = self._setup_score(c)
+        c.setup_candidate = self._is_setup(c)
         c.signals = self._collect_signals(c)
 
     # ── Sub-score computation ──────────────────────────────────────────────
@@ -175,6 +183,14 @@ class ScoringAgent:
     # ── Tier assignment ────────────────────────────────────────────────────
 
     def _assign_tier(self, c: Candidate) -> str:
+        tier = self._score_tier(c)
+        # Extension gate: an already-run name is not actionable — keep it visible
+        # (Tier C feeds the P19 intraday watchlist) but never alert on it.
+        if c.extended and tier in ("A", "B"):
+            return "C"
+        return tier
+
+    def _score_tier(self, c: Candidate) -> str:
         score = c.final_score
         cfg = self.cfg
 
@@ -200,6 +216,8 @@ class ScoringAgent:
     def _is_explosive(self, c: Candidate) -> bool:
         """Mark EXPLOSIVE_CANDIDATE per spec mandatory conditions."""
         cfg = self.cfg
+        if c.extended:
+            return False
         if c.relative_volume < cfg.mandatory_rvol:
             return False
         if not c.above_sma50:
@@ -214,6 +232,62 @@ class ScoringAgent:
         catalyst_ok = c.catalyst_score >= 50.0
         accum_ok = c.institutional_pct is not None and c.institutional_pct > 0.10
         return rev_ok or catalyst_ok or accum_ok
+
+    # ── Extension gate ─────────────────────────────────────────────────────
+
+    def _is_extended(self, c: Candidate) -> bool:
+        """True when the move has already happened (too late to enter)."""
+        cfg = self.cfg
+        return c.price_5d_return > cfg.max_alert_5d_return or c.extension_atr > cfg.max_alert_extension_atr
+
+    # ── Pre-breakout setup ─────────────────────────────────────────────────
+
+    def _setup_score(self, c: Candidate) -> float:
+        """
+        Score how "coiled, not yet moved" a candidate is (0–100).
+
+        Components:
+          coil        tight 10d range (10% → 100, 20% → 50, 40% → 0), +20 on a BB squeeze
+          proximity   close vs prior 50d high (−25% → 0, −10% → 50, −2% or above → 100)
+          volume      early pickup, rvol 0.8 → 0, 1.3 → 50, 2.0+ → 100
+          accumulation  the regular accumulation sub-score (OBV slope + green high-vol days)
+          short_squeeze the regular short-squeeze sub-score (fuel, not trigger)
+        """
+        cfg = self.cfg
+        if c.range_10d_pct > 0:
+            coil = 100.0 - _interp(c.range_10d_pct, 0.10, 0.20, 0.40)
+        else:
+            coil = 0.0  # no OHLCV → no evidence of a coil
+        if c.bb_squeeze:
+            coil = min(100.0, coil + 20.0)
+
+        proximity = _interp(c.dist_to_50d_high, -0.25, -0.10, -0.02) if c.range_10d_pct > 0 else 0.0
+        volume = _interp(c.relative_volume, 0.8, 1.3, 2.0)
+
+        return (
+            cfg.setup_weight_coil * coil
+            + cfg.setup_weight_proximity * proximity
+            + cfg.setup_weight_volume * volume
+            + cfg.setup_weight_accumulation * c.accumulation_score
+            + cfg.setup_weight_short_squeeze * c.short_squeeze_score
+        )
+
+    def _is_setup(self, c: Candidate) -> bool:
+        """Pre-breakout watchlist: quiet price, near the top of its base, no heavy dilution."""
+        cfg = self.cfg
+        if c.extended or c.range_10d_pct <= 0:
+            return False
+        if c.price_5d_return > cfg.setup_max_5d_return:
+            return False
+        if not cfg.setup_min_20d_return <= c.price_20d_return <= cfg.setup_max_20d_return:
+            return False
+        if c.dist_to_50d_high < -cfg.setup_max_below_50d_high:
+            return False
+        if c.relative_volume > cfg.setup_max_rvol:
+            return False
+        if c.dilution_penalty > cfg.mandatory_dilution_penalty_max:
+            return False
+        return c.setup_score >= cfg.setup_min_score
 
     # ── Signal collection ──────────────────────────────────────────────────
 
@@ -243,5 +317,9 @@ class ScoringAgent:
             signals.extend(c.dilution_signals)
         if "halt_risk_high_si" in (c.signals or []):
             signals.append("halt_risk_high_si")
+        if c.extended:
+            signals.append(f"extended_5d_{c.price_5d_return:+.0%}_{c.extension_atr:.1f}atr")
+        if c.setup_candidate:
+            signals.append(f"setup_{c.setup_score:.0f}")
 
         return signals

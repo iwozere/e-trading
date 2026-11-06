@@ -60,3 +60,22 @@ def test_bad_ticker_does_not_poison_other_candidates():
     assert good.relative_volume > 0
     assert good.sma20 > 0
     assert len(result) == 2
+
+
+def test_setup_features_for_flat_base_below_high():
+    """Price drifts back below an earlier spike high: negative distance and a tight 10d range."""
+    df = _ohlcv(60)
+    df.loc[df.index[30], "High"] = 20.0  # old spike high inside the 50d window
+    df.loc[df.index[-10:], ["Open", "High", "Low", "Close"]] = [[8.0, 8.2, 7.9, 8.0]] * 10
+    c = Candidate(ticker="BASE", price=8.0)
+    _agent().run([c], {"BASE": df})
+    assert c.dist_to_50d_high == 8.0 / 20.0 - 1.0
+    assert abs(c.range_10d_pct - (8.2 - 7.9) / 8.0) < 1e-9
+    assert c.extension_atr != 0.0
+
+
+def test_setup_features_steady_uptrend_sits_at_the_high():
+    c = Candidate(ticker="UP", price=8.0)
+    _agent().run([c], {"UP": _ohlcv(60)})
+    assert c.dist_to_50d_high > -0.03
+    assert c.extension_atr > 0

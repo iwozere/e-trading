@@ -67,6 +67,9 @@ class P17TechnicalConfig:
     # Accumulation: count of high-volume green days
     accumulation_lookback_days: int = 20
 
+    # Pre-breakout coil: high–low range over this many sessions (incl. today)
+    setup_range_days: int = 10
+
 
 @dataclass
 class P17ShortSqueezeConfig:
@@ -115,6 +118,27 @@ class P17ScoringConfig:
     # Minimum score to trigger alert notification
     min_alert_score: float = 75.0
 
+    # Extension gate — a candidate whose move already happened is demoted out of
+    # Tier A/B and can never be EXPLOSIVE. Prod history (May–Nov 2026): A/B signals fired
+    # at a median +43% 5d run-up and lost a median 9% over the next 10 sessions.
+    max_alert_5d_return: float = 0.30
+    max_alert_extension_atr: float = 3.0  # close more than 3 ATR above SMA20
+
+    # Pre-breakout setup ("coiled, not yet moved") watchlist gates
+    setup_max_5d_return: float = 0.15
+    setup_min_20d_return: float = -0.15
+    setup_max_20d_return: float = 0.30
+    setup_max_below_50d_high: float = 0.15  # close within 15% below the prior 50-session high
+    setup_max_rvol: float = 4.0  # above this the stock is already moving
+    setup_min_score: float = 60.0
+
+    # Setup sub-score weights — must sum to 1.0
+    setup_weight_coil: float = 0.30
+    setup_weight_proximity: float = 0.25
+    setup_weight_volume: float = 0.20
+    setup_weight_accumulation: float = 0.15
+    setup_weight_short_squeeze: float = 0.10
+
     def __post_init__(self) -> None:
         total = (
             self.weight_momentum
@@ -127,6 +151,15 @@ class P17ScoringConfig:
         )
         if abs(total - 1.0) > 1e-6:
             raise ValueError(f"P17ScoringConfig sub-score weights must sum to 1.0, got {total}")
+        setup_total = (
+            self.setup_weight_coil
+            + self.setup_weight_proximity
+            + self.setup_weight_volume
+            + self.setup_weight_accumulation
+            + self.setup_weight_short_squeeze
+        )
+        if abs(setup_total - 1.0) > 1e-6:
+            raise ValueError(f"P17ScoringConfig setup weights must sum to 1.0, got {setup_total}")
 
 
 @dataclass
