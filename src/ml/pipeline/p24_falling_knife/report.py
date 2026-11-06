@@ -8,6 +8,7 @@ exist — the go/no-go gate. Trades flagged ``suspect_gap`` or ``suspect_in_trad
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Dict, List, Sequence
 
@@ -157,7 +158,16 @@ def portfolio_section(trades: pd.DataFrame, params: PortfolioParams) -> str:
     return note + _table(["period", "taken", "no slot", "max open", "total", "CAGR", "max DD"], rows) if rows else "No full-system trades."
 
 
-def gate_section(trades: pd.DataFrame, costs: CostModel) -> str:
+def gate_timeframes(run_dir: Path) -> List[str]:
+    """Timeframes the owner gate is decided on (``_meta.gate_timeframes`` of the run's calibration; default both)."""
+    path = run_dir / "calibration_frozen.json"
+    if not path.exists():
+        return [DAILY, WEEKLY]
+    meta = json.loads(path.read_text(encoding="utf-8")).get("_meta", {})
+    return list(meta.get("gate_timeframes", [DAILY, WEEKLY]))
+
+
+def gate_section(trades: pd.DataFrame, costs: CostModel, info_only: bool = False) -> str:
     """Markdown: spec §11 gate on holdout trades, or a note that the holdout has not been run."""
     clean = _clean(trades)
     full = clean[(clean["variant"] == FULL) & (clean["period"] == HOLDOUT)]
@@ -166,7 +176,8 @@ def gate_section(trades: pd.DataFrame, costs: CostModel) -> str:
     control = clean[(clean["variant"] == CONTROL) & (clean["period"] == HOLDOUT)]
     rows = [[g.name, {True: "PASS", False: "FAIL", None: "info"}[g.passed], g.detail]
             for g in evaluate_gate(full, control, costs)]
-    return _table(["criterion", "result", "detail"], rows)
+    note = "**Information only:** this timeframe is outside the owner gate (calibration `gate_timeframes`).\n\n" if info_only else ""
+    return note + _table(["criterion", "result", "detail"], rows)
 
 
 def samples_section(run_dir: Path) -> str:
@@ -199,6 +210,7 @@ def build_report(run_dir: Path, costs: CostModel, portfolio: PortfolioParams = P
                         "excluded. Entry next open after the signal bar. CIs are month-block bootstraps. Trades whose "
                         "drop (`suspect_gap`) or holding period (`suspect_in_trade`) contains a suspected unadjusted corporate event are excluded below.\n",
                         survivorship_section(run_dir)]
+    gated = gate_timeframes(run_dir)
     for timeframe in (DAILY, WEEKLY):
         path = run_dir / f"trades_{timeframe}.csv"
         if not path.exists() or path.stat().st_size == 0:
@@ -215,7 +227,7 @@ def build_report(run_dir: Path, costs: CostModel, portfolio: PortfolioParams = P
             "Price buckets (full system)": bucket_section(trades),
             "Concentration (full system)": concentration_section(trades),
             "Portfolio (full system)": portfolio_section(trades, portfolio),
-            "Go/no-go gate (holdout)": gate_section(trades, costs),
+            "Go/no-go gate (holdout)": gate_section(trades, costs, info_only=timeframe not in gated),
         }
         parts.append(f"## {timeframe.capitalize()}\n\n{suspect} trade rows flagged `suspect_gap` or `suspect_in_trade` were excluded.\n")
         parts.extend(f"### {title}\n\n{body}\n" for title, body in sections.items())

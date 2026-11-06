@@ -11,7 +11,7 @@ Examples::
     .venv/Scripts/python.exe src/ml/pipeline/p24_falling_knife/jobs/run_p24_calibrate.py --limit 300 --workers 1
     .venv/Scripts/python.exe src/ml/pipeline/p24_falling_knife/jobs/run_p24_calibrate.py --run-id 20261106-grid
     .venv/Scripts/python.exe src/ml/pipeline/p24_falling_knife/jobs/run_p24_calibrate.py \
-        --repick results/p24_falling_knife/calibration/20261106-grid --frozen-shakeout off
+        --repick results/p24_falling_knife/calibration/20261106-grid --frozen-shakeout off --default-timeframes weekly
 """
 
 from __future__ import annotations
@@ -70,6 +70,9 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--min-trades", type=int, default=100, help="Minimum clean train trades of the picked cell")
     parser.add_argument("--frozen-shakeout", choices=["on", "off"], default="on",
                         help="Which shakeout setting's pick goes into calibration_frozen.json (book rule: on)")
+    parser.add_argument("--default-timeframes", nargs="*", choices=[DAILY, WEEKLY], default=[],
+                        help="Timeframes frozen at their default parameters (only the shakeout setting applied) and "
+                             "reported for information only, outside the go/no-go gate")
     parser.add_argument("--repick", type=Path, default=None, help="Re-pick from an existing run folder's grid CSV")
     parser.add_argument("--run-id", default=None)
     return parser.parse_args(argv)
@@ -214,12 +217,29 @@ def summary_markdown(grid: pd.DataFrame, cells: pd.DataFrame, picks: Dict[Tuple[
     return "\n".join(lines)
 
 
-def frozen_payload(picks: Dict[Tuple[str, bool], Dict[str, Any]], frozen_shakeout: bool, source: str) -> Dict[str, Any]:
-    """Calibration file contents: per timeframe the picked cell's parameters (``apply_calibration`` format)."""
+def frozen_payload(picks: Dict[Tuple[str, bool], Dict[str, Any]], frozen_shakeout: bool, source: str,
+                   default_timeframes: Sequence[str] = ()) -> Dict[str, Any]:
+    """
+    Calibration file contents (``apply_calibration`` format).
+
+    Args:
+        picks: Plateau picks per (timeframe, shakeout).
+        frozen_shakeout: Shakeout setting to freeze.
+        source: Calibration run folder.
+        default_timeframes: Timeframes kept at default parameters (shakeout setting only) and left out of the gate.
+
+    Returns:
+        ``{"_meta": {...}, "daily": {...}, "weekly": {...}}``; ``_meta.gate_timeframes`` lists the gated timeframes.
+    """
+    timeframes = sorted({tf for tf, _ in picks} | set(default_timeframes))
     payload: Dict[str, Any] = {"_meta": {"created_utc": datetime.now(timezone.utc).isoformat(), "source": source,
-                                         "objective": OBJECTIVE, "git_hash": git_hash()}}
+                                         "objective": OBJECTIVE, "git_hash": git_hash(),
+                                         "gate_timeframes": [tf for tf in timeframes if tf not in default_timeframes]}}
+    for timeframe in default_timeframes:
+        payload[timeframe] = {"use_shakeout_rule": bool(frozen_shakeout)}
+        payload["_meta"][f"{timeframe}_info_only"] = True
     for (timeframe, shakeout), pick in picks.items():
-        if shakeout != frozen_shakeout:
+        if shakeout != frozen_shakeout or timeframe in default_timeframes:
             continue
         values: Dict[str, Any] = {d: pick[d] for d in DIMS}
         values["max_bars_since_low"] = int(values["max_bars_since_low"])
@@ -229,7 +249,8 @@ def frozen_payload(picks: Dict[Tuple[str, bool], Dict[str, Any]], frozen_shakeou
     return payload
 
 
-def finish(out_dir: Path, grid: pd.DataFrame, min_trades: int, frozen_shakeout: bool) -> None:
+def finish(out_dir: Path, grid: pd.DataFrame, min_trades: int, frozen_shakeout: bool,
+           default_timeframes: Sequence[str] = ()) -> None:
     """Pick, write the grid, heatmaps, summary and frozen calibration into ``out_dir``."""
     cells, picks = pick_all(grid, min_trades)
     refs = grid[grid["variant"].str.startswith("ref_")]
@@ -237,7 +258,7 @@ def finish(out_dir: Path, grid: pd.DataFrame, min_trades: int, frozen_shakeout: 
     write_heatmaps(cells, picks, out_dir)
     (out_dir / "calibration_summary.md").write_text(summary_markdown(grid, cells, picks, min_trades, frozen_shakeout),
                                                     encoding="utf-8")
-    payload = frozen_payload(picks, frozen_shakeout, str(out_dir))
+    payload = frozen_payload(picks, frozen_shakeout, str(out_dir), default_timeframes)
     (out_dir / "calibration_frozen.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
     _logger.info("P24 calibration picks written to %s", out_dir)
 
@@ -249,7 +270,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.repick is not None:
         grid = pd.read_csv(args.repick / "calibration_grid.csv")
         grid = grid[[c for c in grid.columns if c not in ("neighbours", "worst_neighbour", "on_plateau", "picked")]]
-        finish(args.repick, grid, args.min_trades, frozen_shakeout)
+        finish(args.repick, grid, args.min_trades, frozen_shakeout, args.default_timeframes)
         return 0
     config = replace(P24Config(), random_control_draws=0)
     store = FmpStore(args.data_root, args.vintage)
@@ -270,7 +291,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         part = trades[trades["timeframe"] == timeframe] if not trades.empty else trades
         part.to_csv(out_dir / f"trades_{timeframe}.csv.gz", index=False)
     pd.DataFrame(result.errors, columns=["security_id", "error"]).to_csv(out_dir / "errors.csv", index=False)
-    finish(out_dir, grid_frame(trades, tables, config), args.min_trades, frozen_shakeout)
+    finish(out_dir, grid_frame(trades, tables, config), args.min_trades, frozen_shakeout, args.default_timeframes)
     _logger.info("P24 calibration %s done: %d trades, %d errors", run_id, len(trades), len(result.errors))
     return 0
 

@@ -91,7 +91,12 @@ def bootstrap_ci(trades: pd.DataFrame, column: str = "net_return", stat: str = "
 
     Returns:
         ``{"estimate", "lo", "hi", "months"}``.
+
+    Raises:
+        ValueError: ``stat`` is not ``"mean"`` or ``"win_rate"``.
     """
+    if stat not in ("mean", "win_rate"):
+        raise ValueError(f"unsupported stat {stat!r}")
     frame = trades.dropna(subset=[column])
     if frame.empty:
         return {"estimate": float("nan"), "lo": float("nan"), "hi": float("nan"), "months": 0.0}

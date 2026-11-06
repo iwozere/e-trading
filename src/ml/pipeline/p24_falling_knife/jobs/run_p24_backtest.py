@@ -6,7 +6,7 @@ Examples::
     .venv/Scripts/python.exe src/ml/pipeline/p24_falling_knife/jobs/run_p24_backtest.py --limit 300 --workers 1
     .venv/Scripts/python.exe src/ml/pipeline/p24_falling_knife/jobs/run_p24_backtest.py --timeframe both
     .venv/Scripts/python.exe src/ml/pipeline/p24_falling_knife/jobs/run_p24_backtest.py --holdout \
-        --calibration results/p24_falling_knife/backtest/<run_id>/calibration_frozen.json
+        --calibration results/p24_falling_knife/calibration/<run_id>/calibration_frozen.json
 
 Without ``--holdout`` no holdout-period trade is produced (spec §7.3: the holdout is looked at once, after the
 calibration is frozen).
@@ -203,6 +203,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     random_control_summary(result.random_control).to_csv(out_dir / "random_control_draws.csv", index=False)
     pd.DataFrame(result.errors, columns=["security_id", "error"]).to_csv(out_dir / "errors.csv", index=False)
     write_manifest(out_dir, args, config, store, len(securities), result.securities_with_data, len(result.errors))
+    if args.calibration is not None:
+        (out_dir / "calibration_frozen.json").write_text(args.calibration.read_text(encoding="utf-8"), encoding="utf-8")
     if args.sample_charts > 0 and not trades.empty:
         charts = write_sample_charts(store, securities, trades, config, out_dir, per_timeframe=args.sample_charts)
         _logger.info("P24 backtest %s: %d sample charts written", run_id, len(charts))

@@ -71,3 +71,25 @@ def test_pick_all_and_heatmap(tmp_path: Path) -> None:
     table = cells[cells["use_shakeout_rule"]].pivot_table(index="cci_div_min", columns="w_narrow", values="median")
     path = plot_heatmap(table, tmp_path / "h.png", "test")
     assert path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_frozen_payload_default_timeframe_is_info_only() -> None:
+    from src.ml.pipeline.p24_falling_knife.jobs import run_p24_calibrate as job
+
+    pick = {"zz_pct": 0.2, "support_bounce_pct": 0.06, "w_narrow": 0.4, "cci_div_min": 40.0, "max_bars_since_low": 5.0,
+            "plateau": True}
+    picks = {(DAILY, False): pick, (WEEKLY, False): dict(pick, max_bars_since_low=8.0), (DAILY, True): pick}
+    payload = job.frozen_payload(picks, False, "src", default_timeframes=[WEEKLY])
+    assert payload[WEEKLY] == {"use_shakeout_rule": False}
+    assert payload[DAILY]["max_bars_since_low"] == 5 and payload[DAILY]["use_shakeout_rule"] is False
+    assert payload["_meta"]["gate_timeframes"] == [DAILY]
+
+
+def test_gate_timeframes_reads_calibration(tmp_path: Path) -> None:
+    import json
+
+    from src.ml.pipeline.p24_falling_knife.report import gate_timeframes
+
+    assert gate_timeframes(tmp_path) == [DAILY, WEEKLY]
+    (tmp_path / "calibration_frozen.json").write_text(json.dumps({"_meta": {"gate_timeframes": [DAILY]}}), encoding="utf-8")
+    assert gate_timeframes(tmp_path) == [DAILY]
