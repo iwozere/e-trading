@@ -16,11 +16,16 @@
 - [x] First full default run and review (`results/p24_falling_knife/backtest/20261106-default/`, 128,637 trades, 0
   errors, after the test-listing and reorg-splice fixes)
 - [x] Owner decision 2026-11-06: headline window 2022+ (train 2022–2023, holdout 2024+, upper bound 2004–2021)
-- [ ] M7 calibration grid run (`jobs/run_p24_calibrate.py`, `results/p24_falling_knife/calibration/<run_id>/`)
+- [x] M7 calibration grid run (`results/p24_falling_knife/calibration/20261106-grid/`, 216 cells per timeframe).
+  Owner 2026-11-06: shakeout rule off; daily frozen at zz 0.20, support 0.06, w_narrow 0.4, cci_div_min 40, fresh 5
+  (plateau); weekly kept at defaults, information only.
+- [x] M7 holdout run once (`results/p24_falling_knife/backtest/20261106-holdout/`): daily 373 trades, mean +4.1%
+  (CI −1.5% … +9.3%), median +6.4%, win 63%; gate FAILS `positive_returns` and `beats_drop_only` (+2.6%, CI −1.2% …
+  +5.7%); random control p = 0.18; mean excess over SPY −1.1%; portfolio −7.2% (max DD −30%).
+- [ ] Owner gate decision on the holdout result (Phase 2 only on go)
 
 ### 🚀 PLANNED ENHANCEMENTS
 - [x] M7 Calibration grid code (plateau pick, heatmaps, `calibration_frozen.json`, `--repick`)
-- [ ] M7 Holdout run once with the frozen calibration, owner gate
 - [x] M7 Book-example check (§7.6) — see spec §14.2
 - [x] M7 `chart.py` 4-panel charts + `run_p24_explain.py --chart-dir`
 - [x] M7 20 sample charts in the report (`samples.py`, `--sample-charts`, 10 per timeframe)
@@ -39,9 +44,9 @@
 - `JUMP_NO_SPLIT` + quiet-volume rule is a heuristic; a missing split traded on heavy volume would slip through.
 
 ## Testing Requirements
-- [x] Unit tests for every module (72 tests)
+- [x] Unit tests for every module (74 tests)
 - [ ] Truncation test on real vintage securities (currently synthetic + random-walk series)
 
 ## Documentation Updates
 - [x] README, Requirements, Design, Tasks
-- [ ] Add calibration and gate results once M7 runs
+- [x] Calibration and gate results recorded above
