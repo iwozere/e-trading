@@ -403,6 +403,25 @@ def test_extract_terms_reads_cvr_amount_stated_as_contingent_payment():
     assert terms.upfront_per_share == 8.0 and terms.cvr_max_per_share == 2.0
 
 
+def test_extract_terms_ignores_cvr_totals_for_all_holders():
+    text = (
+        'the right to receive $1.75 in cash (the " Cash Amount "), plus (ii) one contingent value right per Share '
+        '(each, a " CVR "), which represents the right to receive the pro rata portion of two milestone payments of '
+        'up to $350,000,000 in the aggregate. Party B offered contingent value rights of up to $190.0 million. '
+        'One contingent value right representing an aggregate amount of up to $50.0 million for all Shares.'
+    )
+    terms = extract_terms(text, filed=date(2025, 8, 1), subject_name="Durect Corp")
+    assert terms.has_cvr and terms.cvr_max_per_share is None and terms.upfront_per_share == 1.75
+
+
+def test_extract_terms_keeps_large_per_share_cvr():
+    text = 'the right to receive $14.92 in cash, plus one contingent value right ("CVR") for an aggregate of up to $111.64 per CVR.'
+    terms = extract_terms(text, filed=date(2023, 7, 1), subject_name="Sigilon Therapeutics, Inc.")
+    assert terms.cvr_max_per_share == 111.64
+    text = 'plus one contingent value right, which represents the right to receive up to $2.58 in the aggregate in cash.'
+    assert extract_terms(text, filed=date(2017, 11, 1), subject_name="Ocera Therapeutics, Inc.").cvr_max_per_share == 2.58
+
+
 def test_pick_acquirer_skips_names_containing_the_subject():
     parties = {"Plan of Dissolution": "Liquidation of Footstar, Inc.", "King Kee": "King Kee Appraisal and Advisory Limited"}
     assert pick_acquirer(parties, "FOOTSTAR INC", allow_any_party=True) is None

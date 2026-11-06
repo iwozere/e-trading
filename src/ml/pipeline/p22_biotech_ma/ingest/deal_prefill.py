@@ -179,6 +179,9 @@ _CVR_SENTENCE_AMOUNT = re.compile(
     rf"(?:right to receive|contingent (?:cash )?payments? of)\s+(?:a contingent (?:cash )?payment of\s+)?(?:up to\s+)?\$\s?{_NUM}",
     re.I,
 )
+# A CVR stated as a total ("$190.0 million"), not per share. "in the aggregate" alone does not mark one:
+# "up to $1.00 in the aggregate" is per share; "$350,000,000 in the aggregate" fails MAX_PRICE_PER_SHARE.
+_AGGREGATE_AFTER = re.compile(r"\s*(?:million|billion)\b", re.I)
 _EXCHANGE_RATIO = re.compile(r"exchange ratio", re.I)
 _HOLDERS_PCT = re.compile(
     r"([A-Z][A-Za-z0-9\-]+)(?:'s)?\s+(?:pre-merger\s+|existing\s+|current\s+|legacy\s+|former\s+)?"
@@ -447,10 +450,12 @@ def extract_terms(text: str, *, filed: Optional[date], subject_name: str, roster
     cvr_spans: List[Tuple[int, int]] = []
     for match in cvr_matches[:20]:
         window = text[match.start():match.start() + 600]
-        cvr_amounts.extend(_amount(m) for p in _CVR_AMOUNTS for m in p.finditer(window))
+        cvr_amounts.extend(_per_share_cvr(window, m) for p in _CVR_AMOUNTS for m in p.finditer(window))
         # Within the sentence that introduces the CVR, any "right to receive $X" is the CVR's amount:
         # "one contingent value right (a "CVR"), which represents the right to receive $2.63 in cash".
-        cvr_amounts.extend(_amount(m) for m in _CVR_SENTENCE_AMOUNT.finditer(_sentence_from(window)))
+        sentence = _sentence_from(window)
+        cvr_amounts.extend(_per_share_cvr(sentence, m) for m in _CVR_SENTENCE_AMOUNT.finditer(sentence))
+    cvr_amounts = [a for a in cvr_amounts if 0 < a < MAX_PRICE_PER_SHARE]
     if cvr_matches:
         for match in _CVR_MENTION.finditer(text):
             cvr_spans.append((match.start(), match.start() + len(_sentence_from(text[match.start():match.start() + 600]))))
@@ -496,6 +501,14 @@ def _sentence_from(window: str) -> str:
 
 def _amount(match: "re.Match[str]") -> float:
     return float(match.group(1).replace(",", ""))
+
+
+def _per_share_cvr(text: str, match: "re.Match[str]") -> float:
+    """The CVR amount `match` found in `text`, or 0.0 when it is a total for all holders, not per share."""
+    # "an aggregate of up to $111.64 per CVR" is per share; only "million"/"billion" after the amount marks a total
+    if _AGGREGATE_AFTER.match(text, match.end()):
+        return 0.0
+    return _amount(match)
 
 
 def extract_price(

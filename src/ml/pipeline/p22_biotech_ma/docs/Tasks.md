@@ -928,6 +928,10 @@ use in the code/config; this section exists so they're all in one place to walk 
     agreements (Decibel's June 30 confidentiality agreement); prose ending in a suffix word, names with
     an inner "the", law firms, banks and proxy solicitors are no longer buyers; "... Meeting of Novogen
     Limited" → "Novogen Limited"; Hillhouse is a PE buyer.
+  - **Prod rerun 2026-11-06** matched the offline run exactly. Fixed after it: a CVR total read as the
+    per-share CVR (Durect $350,000,000, Mersana $190.0 million → $30.25, Generation Bio $892.5 million,
+    Tobira 740 → $49.84) — an amount followed by "million"/"billion" or ≥ $1,000 is not a CVR per share;
+    "up to $1.00 in the aggregate" (Epizyme, Ocera $2.58) stays per share.
   - Still open: a cluster mixing two deals (Allergan) is not split; the `acquirer_name` of a reverse
     merger is unreliable (CervoMed shows Vertex, a licensor) — informational only, `reverse_merger` is a
     negative label; cash-and-stock deals leave `stock_consideration_pct` blank.
