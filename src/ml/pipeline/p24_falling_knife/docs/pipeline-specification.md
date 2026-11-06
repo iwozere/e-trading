@@ -468,6 +468,10 @@ Register both in a new `src/data/pipeline/specs/p24_specs.py` (`PluginSpec`, cat
 `signal_ledger_specs.py`), then add the module to the registry the same way the other spec modules are loaded. Deploy is
 `python -m src.data.pipeline.register_jobs` on the Pi. Register them **disabled** until the owner enables them.
 
+> **As built (2026-11-06):** daily cron `45 22 * * 1-5` (22:30 already hosts three jobs); outputs carry a timeframe
+> suffix (`signals_daily.csv`, `signals_weekly.csv`, …) because the weekly folder date is also a daily folder; paper
+> state is replayed from the signal each run; Telegram gets a text message plus one photo message per chart.
+
 ### 9.2 Daily folder
 
 ```

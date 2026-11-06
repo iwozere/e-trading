@@ -13,6 +13,10 @@ FMP vintage ──► data.py ──► universe.py (eligibility) ──► indi
                                                                  own EMA)
 backtest.py: chunks → process pool → per security: one context per (zz_pct, support_bounce_pct), every variant walks it
 validation.py / report.py: metrics, month-block bootstrap, controls, cost repricing, gate → report.md
+
+Live (Phase 2):
+live.py (universe, DataManager bars) ──► scan.py (same detector, last bar) ──► paper.py (replayed positions)
+   ──► chart.py ──► notify.py (Telegram text + photos, email HTML + charts); jobs/run_p24_scan.py orchestrates
 ```
 
 ### Component Design
@@ -55,6 +59,19 @@ validation.py / report.py: metrics, month-block bootstrap, controls, cost repric
 - **Coverage proxy.** The vintage cannot say what it is missing; coverage = year's delisting rate / median rate of
   2022–2025 (headline window 2022+, owner decision 2026-11-06).
 
+- **Live = backtest code.** The scan calls the same `build_context`/`detect`/`simulate_trade`; only the bar source
+  differs. Live bars are split-adjusted, which equals the as-traded price for recent bars, so the price floor and cost
+  tier stay correct where they matter (today's bar).
+- **Paper positions are replayed, not stepped.** Each run re-finds the signal (the detector is causal) and replays
+  `simulate_trade` on the latest bars; status and today's events follow from dates, so a re-run is idempotent and a
+  missed day self-heals. `Trade.exit_at_open` separates a filled exit from one pending for the next open.
+- **Per-timeframe output files.** The weekly scan's folder (the week's last session) is also a daily folder, so every
+  output carries a `_<tf>` suffix instead of the spec's single `signals.csv`.
+- **Self-notifying job.** No scheduler `notification_rules` (they would add a key/value dump); like P05 the scan queues
+  its own messages. Telegram gets a short text plus one photo per chart, because its sender repeats the message text
+  as the caption of every attachment.
+
 ## Integration Patterns
 - Read-only use of the FMP vintage through `FmpStore`; no writes outside `results/p24_falling_knife/`.
-- Phase 2 will publish `results/p24_falling_knife/YYYY-MM-DD/signals.csv` for the signal ledger.
+- Phase 2 publishes `results/p24_falling_knife/YYYY-MM-DD/signals_<tf>.csv`; the signal ledger's `harvest_p24` reads
+  it (sources `p24_daily` horizon 40 sessions, `p24_weekly` horizon 130, 60 bps round trip).

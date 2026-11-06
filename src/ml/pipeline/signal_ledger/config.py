@@ -39,6 +39,9 @@ COST_BPS: Dict[str, float] = {
     "p06_phase2_alerts": 30.0,
     "p06_final_universe": 30.0,
     "p10_final_passed": 30.0,
+    # P24 trades crashed names: tiered costs average ~0.3% per side in the backtest.
+    "p24_daily": 60.0,
+    "p24_weekly": 60.0,
 }
 
 # Nightly harvest only rescans recent result folders; --full rescans everything (backfill).

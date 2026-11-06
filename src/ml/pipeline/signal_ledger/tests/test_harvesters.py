@@ -86,3 +86,21 @@ def test_p19_first_alert_per_ticker_day_for_momentum_tiers(tmp_path: Path) -> No
 
 def test_missing_pipelines_yield_nothing(tmp_path: Path) -> None:
     assert harvest_all(tmp_path) == []
+
+
+def test_harvest_p24_reads_both_timeframes_and_skips_suspect(tmp_path: Path) -> None:
+    from src.ml.pipeline.signal_ledger.harvesters import harvest_p24
+
+    _write(tmp_path / "p24_falling_knife/2026-11-06/signals_daily.csv",
+           "timeframe,ticker,close,drop_pct,score,suspect_gap\ndaily,low,5.0,0.45,0.2,False\n"
+           "daily,HIGH,9.0,0.6,0.9,False\ndaily,BAD,3.0,0.5,0.99,True\n")
+    _write(tmp_path / "p24_falling_knife/2026-11-06/signals_weekly.csv", "timeframe,ticker,close,drop_pct,score\nweekly,WK,20,0.5,0.4\n")
+    _write(tmp_path / "p24_falling_knife/_state/signals_daily.csv", "ticker\nNOPE\n")
+
+    records = harvest_p24(tmp_path, since=None)
+    daily = [r for r in records if r.source == "p24_daily"]
+    assert [(r.ticker, r.rank) for r in daily] == [("HIGH", 1), ("LOW", 2)]
+    assert daily[0].horizon_days == 40 and daily[0].meta["drop_pct"] == 0.6
+    weekly = [r for r in records if r.source == "p24_weekly"]
+    assert [r.ticker for r in weekly] == ["WK"] and weekly[0].horizon_days == 130
+    assert all(r.pipeline == "p24" and r.side == "long" and r.signal_date == date(2026, 11, 6) for r in records)

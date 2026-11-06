@@ -970,6 +970,7 @@ class SchedulerService:
             "src/ml/pipeline/p17_penny_stocks/run_p17.py",
             "src/ml/pipeline/p18_institutional_flow_tracker/run_p18_scan.py",
             "src/ml/pipeline/p19_penny_intraday/run_p19.py",
+            "src/ml/pipeline/p24_falling_knife/jobs/run_p24_scan.py",
             "src/strategy_pack/run.py",
         }
 

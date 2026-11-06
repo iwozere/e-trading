@@ -108,9 +108,36 @@ def is_common_stock(security: Security, include_adr: bool = False) -> bool:
     allowed = {"stock", "adr"} if include_adr else {"stock"}
     if security.instrument_type not in allowed:
         return False
-    if _TEST_SYMBOL_RE.match(security.symbol) or _TEST_NAME_RE.search(security.name or ""):
+    if is_test_listing(security.symbol, security.name):
         return False
-    return bool(_PLAIN_SYMBOL_RE.match(security.symbol)) and not _DERIVATIVE_SUFFIX_RE.match(security.symbol)
+    return is_plain_symbol(security.symbol)
+
+
+def is_plain_symbol(symbol: str) -> bool:
+    """
+    True for a 1–5 letter symbol without a warrant/right/unit/preferred fifth-letter suffix.
+
+    Args:
+        symbol: Ticker.
+
+    Returns:
+        True if the symbol looks like a plain share class.
+    """
+    return bool(_PLAIN_SYMBOL_RE.match(symbol)) and not _DERIVATIVE_SUFFIX_RE.match(symbol)
+
+
+def is_test_listing(symbol: str, name: Optional[str]) -> bool:
+    """
+    True for an exchange test listing (``ZXZZT``-style symbol or a "test stock" name).
+
+    Args:
+        symbol: Ticker.
+        name: Security name, if known.
+
+    Returns:
+        True if the listing is an exchange test issue.
+    """
+    return bool(_TEST_SYMBOL_RE.match(symbol) or _TEST_NAME_RE.search(name or ""))
 
 
 def survivorship_table(securities: List[Security], first_year: int, last_year: int, reference_years: Tuple[int, int],

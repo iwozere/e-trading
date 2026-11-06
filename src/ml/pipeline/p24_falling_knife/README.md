@@ -2,10 +2,12 @@
 
 ## Overview
 Research pipeline for the "falling knife" reversal method (ADX mountain + PPO valley + CCI positive divergence after a
-≥ 40% drop), from chapter 11 of *Explosive Stock Trading Strategies* (summary in `docs/11-chapter.html`). The chapter's
+≥ 40% drop), from chapter 11 of *Explosive Stock Trading Strategies*. The chapter's
 visual rules are turned into exact, testable rules (`docs/pipeline-specification.md` §4). Phase 1 is a historical
-backtest on the FMP vintage that tests the book's ">80% winners" claim against control baselines. A live scan
-(Phase 2) is built only after the go/no-go gate in spec §11.
+backtest on the FMP vintage that tests the book's ">80% winners" claim against control baselines. The 2024+ holdout
+**failed** the go/no-go gate (no edge distinguishable from buying every 40% drop), so Phase 2 runs as a **paper +
+notify** live scan only (owner decision 2026-11-06): daily and weekly scans, paper positions, Telegram/email alerts
+with charts, and signal-ledger tracking. Both scheduler jobs are registered disabled.
 
 ## Features
 - Causal detector: ZigZag reference peak, ADX mountain, PPO valley (with lower-third depth), normalized ADX/PPO
@@ -13,7 +15,9 @@ backtest on the FMP vintage that tests the book's ">80% winners" claim against c
 - Exits: CCI ≥ +200, bearish CCI divergence, post-signal shakeout test against point 3, time stop, optional hard stop.
 - Daily and weekly timeframes; costs tiered by as-traded price; delisting handled.
 - Backtest with ablation variants, drop-only and matched-random controls, month-block bootstrap CIs, survivorship
-  report, holdout guard.
+  report, holdout guard; calibration grid with plateau pick.
+- Live scan (`jobs/run_p24_scan.py`): signals on the last closed session/week, forming watchlist, replayed paper
+  positions, one Telegram + email message per run with charts, outputs harvested by the signal ledger.
 
 ## Quick Start
 ```bash
@@ -44,14 +48,36 @@ ctx = build_context(bars, DAILY_PARAMS)        # bars: OHLCV DataFrame on a Date
 signals, _ = detect(ctx, DAILY_PARAMS)
 ```
 
+### Live scan
+```bash
+# Dry run on a few symbols (no notification, scratch paper state)
+.venv/Scripts/python.exe src/ml/pipeline/p24_falling_knife/jobs/run_p24_scan.py --timeframe daily --symbols SONO MPWR \
+    --no-notify --state /tmp/p24_paper.json
+# Full daily scan as the scheduler runs it (it appends --user-id)
+.venv/Scripts/python.exe src/ml/pipeline/p24_falling_knife/jobs/run_p24_scan.py --timeframe daily
+```
+Without `--date` a run before 21:15 UTC scans the previous session (today's may still be trading). Outputs land in
+`results/p24_falling_knife/YYYY-MM-DD/` (folder date = signal date): `signals_<tf>.csv`, `forming_<tf>.csv`,
+`paper_positions_<tf>.csv`, `paper_exits_<tf>.csv`, `charts/*.png`, `run_summary_<tf>.json`, `pipeline_<tf>.log`.
+Paper state: `results/p24_falling_knife/_state/paper_positions.json`.
+
+**Deploy (Pi):** `git pull`, then `python -m src.data.pipeline.register_jobs` registers `P24 Falling Knife Daily
+Scan` (22:45 UTC Mon–Fri) and `P24 Falling Knife Weekly Scan` (12:00 UTC Sat) **disabled**; enable them in the
+scheduler when wanted. The first run fetches ~4 years of daily bars for ~5,000 symbols (cold cache, up to ~1–2 h).
+
 ## Integration
 This module integrates with:
-- `src.data.fmp_pipeline` — FMP vintage reader (`FmpStore`), `adjust()`, bar flags
-- `src.notification` — logger (Phase 2: alerts)
-- `src.ml.pipeline.signal_ledger` — Phase 2 harvester (not built yet)
+- `src.data.fmp_pipeline` — FMP vintage reader (`FmpStore`), `adjust()`, bar flags (backtest)
+- `src.data.data_manager.DataManager` — live daily bars (Yahoo path; the FMP adapter is off for live jobs)
+- `src.ml.pipeline.shared.universe_downloader` — NASDAQ Trader symbol directory (live universe)
+- `src.data.db.services.notification_service` / `users_service` — Telegram + email messages
+- `src.data.pipeline.specs.p24_specs` — scheduler job specs; `src.scheduler` injects `--user-id`
+- `src.ml.pipeline.signal_ledger` — `harvest_p24` reads `signals_<tf>.csv` (sources `p24_daily`, `p24_weekly`)
 
 ## Configuration
 All thresholds are in `config.py` (`DAILY_PARAMS`, `WEEKLY_PARAMS`, `UniverseParams`, `CostModel`, `BacktestWindow`).
+The live scan uses `live_params(tf)` = defaults + `LIVE_OVERRIDES` (the frozen 2026-11-06 calibration) and
+`LiveParams` (lookback, paper notional, forming threshold, charts per message).
 The FMP data root defaults to `D:/data-cache/fmp-data` (`--data-root`).
 
 ## Related Documentation

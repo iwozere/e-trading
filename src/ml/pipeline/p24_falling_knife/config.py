@@ -258,3 +258,37 @@ VARIANTS: Dict[str, Dict[str, object]] = {
     "full_hard_stop_30": dict(hard_stop_pct=0.30),
     "full_no_shakeout_rule": dict(use_shakeout_rule=False),
 }
+
+
+# Live scan (Phase 2, spec §9). Frozen calibration from results/p24_falling_knife/calibration/20261106-grid (owner
+# 2026-11-06: shakeout rule off; daily plateau pick; weekly at defaults, information only).
+LIVE_OVERRIDES: Dict[str, Dict[str, object]] = {
+    DAILY: {"zz_pct": 0.20, "support_bounce_pct": 0.06, "w_narrow": 0.40, "cci_div_min": 40.0, "max_bars_since_low": 5,
+            "use_shakeout_rule": False},
+    WEEKLY: {"use_shakeout_rule": False},
+}
+LIVE_DIR = RESULTS_DIR
+PAPER_STATE_PATH = STATE_DIR / "paper_positions.json"
+
+
+@dataclass(frozen=True)
+class LiveParams:
+    """Live scan settings (spec §9)."""
+
+    lookback_days: int = 1461            # calendar days of daily bars fetched (≈ 4 years: indicator warm-up + PPO range)
+    position_usd: float = 2_000.0        # paper notional per signal (signal-ledger convention)
+    forming_max_missing: int = 2         # forming watchlist: setups missing at most this many conditions
+    max_charts: int = 10                 # charts attached to one notification
+
+
+def live_params(timeframe: str) -> TimeframeParams:
+    """
+    Frozen live parameters of a timeframe (``LIVE_OVERRIDES`` on the defaults).
+
+    Args:
+        timeframe: ``"daily"`` or ``"weekly"``.
+
+    Returns:
+        Parameters for the live scan.
+    """
+    return PARAMS_BY_TIMEFRAME[timeframe].with_overrides(**LIVE_OVERRIDES[timeframe])

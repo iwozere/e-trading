@@ -22,7 +22,10 @@
 - [x] M7 holdout run once (`results/p24_falling_knife/backtest/20261106-holdout/`): daily 373 trades, mean +4.1%
   (CI −1.5% … +9.3%), median +6.4%, win 63%; gate FAILS `positive_returns` and `beats_drop_only` (+2.6%, CI −1.2% …
   +5.7%); random control p = 0.18; mean excess over SPY −1.1%; portfolio −7.2% (max DD −30%).
-- [ ] Owner gate decision on the holdout result (Phase 2 only on go)
+- [x] Owner gate decision 2026-11-06: build Phase 2 as paper + notify only, daily (weekly information only)
+- [x] Phase 2: `live.py`, `scan.py`, `paper.py`, `notify.py`, `jobs/run_p24_scan.py`, `p24_specs.py` (disabled),
+  scheduler `--user-id` allowlist, signal-ledger `harvest_p24` + test; SONO 2025-04-23 end-to-end replay (+28.5%)
+- [ ] Deploy to the Pi (`git pull`, `register_jobs`), enable the daily scan, watch the first cold-cache run
 
 ### 🚀 PLANNED ENHANCEMENTS
 - [x] M7 Calibration grid code (plateau pick, heatmaps, `calibration_frozen.json`, `--repick`)
@@ -30,7 +33,6 @@
 - [x] M7 `chart.py` 4-panel charts + `run_p24_explain.py --chart-dir`
 - [x] M7 20 sample charts in the report (`samples.py`, `--sample-charts`, 10 per timeframe)
 - [x] M7 Portfolio layer (§6.3) `portfolio.py` + report section (realized equity; daily marks still open)
-- [ ] Phase 2 (after gate): live scan, paper positions, notifications, signal-ledger harvester, `p24_specs.py`
 - [ ] Phase 3: index mode, multi-timeframe confirmation, on-the-way-down statistics
 
 ## Technical Debt
@@ -44,7 +46,7 @@
 - `JUMP_NO_SPLIT` + quiet-volume rule is a heuristic; a missing split traded on heavy volume would slip through.
 
 ## Testing Requirements
-- [x] Unit tests for every module (74 tests)
+- [x] Unit tests for every module (82 tests + signal-ledger harvester test)
 - [ ] Truncation test on real vintage securities (currently synthetic + random-walk series)
 
 ## Documentation Updates

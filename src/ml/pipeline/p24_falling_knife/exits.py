@@ -45,6 +45,8 @@ class Trade:
     shakeout_widening: bool
     delisted_in_trade: bool
     suspect_in_trade: bool = False
+    # True when the exit filled at a bar's open; False when it is the last close (rule fired on the last bar, end of data).
+    exit_at_open: bool = False
 
 
 def simulate_trade(ctx: SeriesContext, signal: BarEval, params: TimeframeParams, costs: CostModel,
@@ -97,7 +99,9 @@ def simulate_trade(ctx: SeriesContext, signal: BarEval, params: TimeframeParams,
             reason = HARD_STOP
         if reason is not None:
             break
+    exit_at_open = False
     if reason is not None and i < last and np.isfinite(ctx.open[i + 1]):
+        exit_at_open = True
         exit_bar, exit_price = i + 1, float(ctx.open[i + 1])
     else:
         exit_bar, exit_price = i, float(ctx.close[i])
@@ -122,6 +126,7 @@ def simulate_trade(ctx: SeriesContext, signal: BarEval, params: TimeframeParams,
         shakeout_widening=shakeout_widening,
         delisted_in_trade=delisted and exit_bar >= last,
         suspect_in_trade=bool(ctx.cliff[entry_bar + 1:exit_bar + 1].any()),
+        exit_at_open=exit_at_open,
     )
 
 

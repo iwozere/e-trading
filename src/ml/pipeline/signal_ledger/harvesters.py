@@ -230,6 +230,34 @@ def harvest_p21(results_root: Path, since: Optional[date]) -> List[SignalRecord]
     return records
 
 
+# P24 paper positions are held until a CCI exit (median ~47 sessions daily, ~30 weeks weekly).
+_P24_HORIZON_DAYS = {"daily": 40, "weekly": 130}
+
+
+def harvest_p24(results_root: Path, since: Optional[date]) -> List[SignalRecord]:
+    """P24 Falling Knife ``signals_<tf>.csv`` (sub-streams ``p24_daily`` / ``p24_weekly``), score-ranked, long only."""
+    records: List[SignalRecord] = []
+    for timeframe, horizon in _P24_HORIZON_DAYS.items():
+        for day, path in dated_files(results_root / "p24_falling_knife", f"signals_{timeframe}.csv", since):
+            df = _read_csv(path)
+            if df is None or "ticker" not in df:
+                continue
+            if "suspect_gap" in df:
+                df = df[~df["suspect_gap"].fillna(False).astype(bool)]
+            if "score" in df:
+                df = df.sort_values("score", ascending=False)
+            for position, row in enumerate(df.to_dict("records"), start=1):
+                ticker = clean_ticker(row.get("ticker"))
+                if not ticker:
+                    continue
+                records.append(SignalRecord(
+                    pipeline="p24", source=f"p24_{timeframe}", signal_date=day, ticker=ticker, rank=position,
+                    score=_optional_float(row.get("score")), horizon_days=horizon,
+                    meta={"drop_pct": _optional_float(row.get("drop_pct")), "close": _optional_float(row.get("close"))},
+                ))
+    return records
+
+
 HARVESTERS: Dict[str, Callable[[Path, Optional[date]], List[SignalRecord]]] = {
     "p05": harvest_p05,
     "p06": harvest_p06,
@@ -237,6 +265,7 @@ HARVESTERS: Dict[str, Callable[[Path, Optional[date]], List[SignalRecord]]] = {
     "p17": harvest_p17,
     "p19": harvest_p19,
     "p21": harvest_p21,
+    "p24": harvest_p24,
 }
 
 
