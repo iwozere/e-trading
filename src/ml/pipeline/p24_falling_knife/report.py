@@ -19,6 +19,7 @@ from src.ml.pipeline.p24_falling_knife.config import DAILY, WEEKLY, CostModel, P
 from src.ml.pipeline.p24_falling_knife.portfolio import simulate_portfolio
 from src.ml.pipeline.p24_falling_knife.validation import (
     bootstrap_ci,
+    clean_trades,
     evaluate_gate,
     paired_difference_ci,
     random_control_p_value,
@@ -27,7 +28,6 @@ from src.ml.pipeline.p24_falling_knife.validation import (
 )
 
 CONTROL = "drop_only"
-SUSPECT_COLUMNS = ("suspect_gap", "suspect_in_trade")
 PERIODS = (TRAIN, HOLDOUT, UPPER_BOUND)
 COST_MULTIPLIERS = (0.5, 1.0, 2.0, 3.0)
 
@@ -45,11 +45,7 @@ def _table(header: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
 
 
 def _clean(trades: pd.DataFrame) -> pd.DataFrame:
-    keep = pd.Series(True, index=trades.index)
-    for column in SUSPECT_COLUMNS:
-        if column in trades.columns:
-            keep &= ~trades[column].fillna(False).astype(bool)
-    return trades[keep]
+    return clean_trades(trades)
 
 
 def survivorship_section(run_dir: Path) -> str:
@@ -173,6 +169,17 @@ def gate_section(trades: pd.DataFrame, costs: CostModel) -> str:
     return _table(["criterion", "result", "detail"], rows)
 
 
+def samples_section(run_dir: Path) -> str:
+    """Markdown image list of the run's sample trade charts (``samples.write_sample_charts``)."""
+    folder = run_dir / "charts" / "samples"
+    images = sorted(folder.glob("*.png")) if folder.exists() else []
+    if not images:
+        return "## Sample trade charts\n\nNo sample charts in this run.\n"
+    lines = [f"![{p.stem}](charts/samples/{p.name})" for p in images]
+    return ("## Sample trade charts\n\nSeeded random sample of clean full-system trades (headline periods first).\n\n"
+            + "\n\n".join(lines) + "\n")
+
+
 def build_report(run_dir: Path, costs: CostModel, portfolio: PortfolioParams = PortfolioParams()) -> str:
     """
     Assemble ``report.md`` for a run folder.
@@ -212,6 +219,7 @@ def build_report(run_dir: Path, costs: CostModel, portfolio: PortfolioParams = P
         }
         parts.append(f"## {timeframe.capitalize()}\n\n{suspect} trade rows flagged `suspect_gap` or `suspect_in_trade` were excluded.\n")
         parts.extend(f"### {title}\n\n{body}\n" for title, body in sections.items())
+    parts.append(samples_section(run_dir))
     return "\n".join(parts)
 
 

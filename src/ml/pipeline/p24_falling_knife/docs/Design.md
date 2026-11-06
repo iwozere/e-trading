@@ -46,10 +46,14 @@ validation.py / report.py: metrics, month-block bootstrap, controls, cost repric
   prior 20-day median; a quiet ≥ 30% fall (< 1.5× volume) also counts. Suspect trades are reported, not used.
 - **Event-driven, not vectorbt.** Path state (swings, re-arm, shakeout) makes `from_signals` a poor fit; numpy
   pre-computation plus a candidate-only loop is fast enough (~0.08 s per security for 8 variants).
+- **Shared signal walks.** Variants that differ only in exit settings (`EXIT_FIELDS`) reuse one `detect` result;
+  the calibration grid runs every cell with the shakeout rule on and off at the cost of one walk.
+- **Plateau, not peak.** The calibration pick must have every one-step neighbour within 25% of its median (§7.3), so a
+  lone lucky cell is never chosen.
 - **Month-block bootstrap.** Signals cluster in crashes (2008-10, 2020-03); resampling single trades would overstate
   confidence.
 - **Coverage proxy.** The vintage cannot say what it is missing; coverage = year's delisting rate / median rate of
-  2021–2025.
+  2022–2025 (headline window 2022+, owner decision 2026-11-06).
 
 ## Integration Patterns
 - Read-only use of the FMP vintage through `FmpStore`; no writes outside `results/p24_falling_knife/`.

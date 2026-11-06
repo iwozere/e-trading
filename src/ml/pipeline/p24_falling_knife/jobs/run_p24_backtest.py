@@ -45,6 +45,7 @@ from src.ml.pipeline.p24_falling_knife.config import (  # noqa: E402
 )
 from src.ml.pipeline.p24_falling_knife.data import load_daily_batch  # noqa: E402
 from src.ml.pipeline.p24_falling_knife.report import write_report  # noqa: E402
+from src.ml.pipeline.p24_falling_knife.samples import write_sample_charts  # noqa: E402
 from src.ml.pipeline.p24_falling_knife.universe import (  # noqa: E402
     Security,
     is_common_stock,
@@ -73,6 +74,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--min-price", type=float, default=None, help="Override the raw-price floor (e.g. 0.10)")
     parser.add_argument("--holdout", action="store_true", help="Also produce holdout-period trades (needs --calibration)")
     parser.add_argument("--calibration", type=Path, default=None, help="calibration_frozen.json to apply")
+    parser.add_argument("--sample-charts", type=int, default=10, help="Sample trade charts per timeframe (0: none)")
     parser.add_argument("--run-id", default=None)
     return parser.parse_args(argv)
 
@@ -201,6 +203,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     random_control_summary(result.random_control).to_csv(out_dir / "random_control_draws.csv", index=False)
     pd.DataFrame(result.errors, columns=["security_id", "error"]).to_csv(out_dir / "errors.csv", index=False)
     write_manifest(out_dir, args, config, store, len(securities), result.securities_with_data, len(result.errors))
+    if args.sample_charts > 0 and not trades.empty:
+        charts = write_sample_charts(store, securities, trades, config, out_dir, per_timeframe=args.sample_charts)
+        _logger.info("P24 backtest %s: %d sample charts written", run_id, len(charts))
     write_report(out_dir, config.costs)
     _logger.info("P24 backtest %s done: %d trades, %d securities with data, %d errors -> %s", run_id, len(trades),
                  result.securities_with_data, len(result.errors), out_dir)

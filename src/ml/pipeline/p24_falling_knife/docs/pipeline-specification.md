@@ -649,6 +649,9 @@ Consequences, binding for the implementation:
 - **Headline window: 2021-01-01 to the vintage end.** Train 2021-01-01 – 2023-12-31 (includes the 2022 bear market),
   holdout 2024-01-01 – vintage end. Indicator warm-up data is loaded from 2019-06.
 - 2004–2020 runs on survivors only and is reported as an **optimistic upper bound**. It is never used for calibration.
+- **Superseded 2026-11-06 (owner): headline window 2022+.** 2021's estimated delisted coverage is 44.5%, under the
+  50% threshold, so train is 2022-01-01 – 2023-12-31, holdout 2024-01-01 – vintage end, and 2004–2021 is the
+  upper bound. The coverage reference years are 2022–2025.
 - **Book examples:** `AONE`, `PWER` and `ATHR` in the vintage are **different, later companies that reuse the ticker**
   (first prices 2020-10, 2023-11, 2025-04). The originals are not in the vintage. Only MPWR, VMW, DIA and QQQ can be
   checked in §7.6. Match examples on `security_id` + date range, never on the symbol alone.
@@ -678,3 +681,12 @@ Consequences, binding for the implementation:
 - **Book-example check, defaults after these fixes:** daily VMW 2008-10-22 $20.29 (book ≈ $20), MPWR 2008-12-09 $9.60
   (book weekly ≈ $9), DIA 2009-03-11 $69.38; weekly QQQ 2009-01-02, DIA 2008-12-19. MPWR weekly fails narrowly (ADX
   peak 31.1, CCI divergence 21 < 25). None of the defaults were tuned beyond the fixes listed above.
+- **More suspect-data rules (2026-11-06):** exchange test listings (`ZXZZT`-style symbols, names with "test
+  (common) stock" / "SuperMontage test") are not common stock. A one-bar rise of ≥ 4× (`splice_ratio`) on volume under
+  3× the median is a suspected reorg splice. Trades are excluded if the event is in the drop (`suspect_gap`) or in the
+  holding period (`suspect_in_trade`); the random control drops such draws too.
+- **Calibration (§7.3) as built:** grid `zz_pct` {0.20, 0.25, 0.30} × `support_bounce_pct` {0.06, 0.10} × `w_narrow`
+  {0.4, 0.6, 0.8} × `cci_div_min` {15, 25, 40} × `max_bars_since_low` {5, 8} daily / {8, 12} weekly = 108 cells per
+  timeframe, each with the shakeout rule on and off (216 runs; the off runs reuse the same signals). Plateau = every
+  one-step neighbour's median within 25% of the cell's; the shakeout setting in `calibration_frozen.json` is the
+  owner's choice (book rule: on).

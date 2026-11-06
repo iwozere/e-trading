@@ -8,7 +8,7 @@ Every threshold of the detector, exits, universe filter, cost model and backtest
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, fields, replace
 from datetime import date
 from pathlib import Path
 from typing import Dict, Optional, Tuple
@@ -21,6 +21,9 @@ STATE_DIR = RESULTS_DIR / "_state"
 
 DAILY = "daily"
 WEEKLY = "weekly"
+
+# Fields that only change how a trade is exited; variants differing only in these share one signal walk.
+EXIT_FIELDS = ("cci_exit", "cci_bear_div_min", "max_hold_bars", "hard_stop_pct", "use_shakeout_rule", "cci_shakeout_margin", "w_widen")
 
 
 @dataclass(frozen=True)
@@ -114,6 +117,19 @@ class TimeframeParams:
         """
         return replace(self, **overrides)  # type: ignore[arg-type]
 
+    def detection_params(self) -> "TimeframeParams":
+        """
+        Return a copy with every exit-only field reset to its class default.
+
+        Two parameter sets with equal ``detection_params()`` produce the same signals, so the backtest can reuse one
+        signal walk for variants that differ only in exits.
+
+        Returns:
+            New frozen instance (hashable, usable as a cache key).
+        """
+        defaults: Dict[str, object] = {f.name: f.default for f in fields(self) if f.name in EXIT_FIELDS}
+        return self.with_overrides(**defaults)
+
 
 DAILY_PARAMS = TimeframeParams(name=DAILY)
 
@@ -175,17 +191,17 @@ class CostModel:
 
 @dataclass(frozen=True)
 class BacktestWindow:
-    """Signal-date windows (spec §14.1). Indicator warm-up may use earlier data."""
+    """Signal-date windows (spec §14.1, owner decision 2026-11-06: headline 2022+). Indicator warm-up may use earlier data."""
 
-    headline_start: date = date(2021, 1, 1)
+    headline_start: date = date(2022, 1, 1)
     train_end: date = date(2023, 12, 31)
     holdout_start: date = date(2024, 1, 1)
     upper_bound_start: date = date(2004, 1, 1)
-    upper_bound_end: date = date(2020, 12, 31)
+    upper_bound_end: date = date(2021, 12, 31)
     data_start: date = date(2000, 1, 1)
     # §7.4 / §14: years whose estimated delisted coverage is below the threshold are "optimistic upper bound" only.
     coverage_threshold: float = 0.50
-    coverage_reference_years: Tuple[int, int] = (2021, 2025)
+    coverage_reference_years: Tuple[int, int] = (2022, 2025)
 
 
 @dataclass(frozen=True)

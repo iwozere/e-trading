@@ -4,6 +4,7 @@ P24 Falling Knife — signal chart (spec §9.3).
 Four stacked panels on one x-axis: price as a line (the chapter prefers a line chart for spotting divergences), PPO
 with signal line and histogram, ADX with +DI/−DI and the channel width ``W``, CCI with ±100/±200 guides. Points P1,
 S3, L2, the entry E and the exit are marked on price; X on ADX, Y on PPO; the CCI troughs at S3 and L2 are joined by a line.
+Also the calibration heatmap (spec §7.3).
 """
 
 from __future__ import annotations
@@ -12,6 +13,8 @@ from pathlib import Path
 from typing import Optional
 
 import matplotlib
+import numpy as np
+import pandas as pd
 
 matplotlib.use("Agg")
 
@@ -90,6 +93,41 @@ def plot_signal(ctx: SeriesContext, signal: BarEval, path: Path, title: str, tra
         ax_cci.plot([ctx.index[signal.s3], ctx.index[signal.l2]], [signal.cci_3, signal.cci_2], color="#b03a2e", lw=1.2)
     ax_cci.set_ylabel("CCI")
 
+    fig.tight_layout()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=110)
+    plt.close(fig)
+    return path
+
+
+def plot_heatmap(table: pd.DataFrame, path: Path, title: str, fmt: str = "{:.1%}") -> Path:
+    """
+    Draw a calibration heatmap (spec §7.3: ``w_narrow`` × ``cci_div_min``) to a PNG.
+
+    Args:
+        table: Pivot table (rows on the y-axis, columns on the x-axis, cells the objective; NaN allowed).
+        path: Output PNG path (parent folders are created).
+        title: Chart title.
+        fmt: Cell label format.
+
+    Returns:
+        ``path``.
+    """
+    values = table.to_numpy(dtype=float)
+    finite = values[np.isfinite(values)]
+    limit = float(np.abs(finite).max()) if finite.size else 1.0
+    fig, ax = plt.subplots(figsize=(1.6 * max(3, table.shape[1]) + 1.5, 1.0 * max(3, table.shape[0]) + 1.2))
+    image = ax.imshow(values, cmap="RdYlGn", vmin=-limit, vmax=limit, aspect="auto", origin="lower")
+    ax.set_xticks(range(table.shape[1]), [str(c) for c in table.columns])
+    ax.set_yticks(range(table.shape[0]), [str(r) for r in table.index])
+    ax.set_xlabel(str(table.columns.name or ""))
+    ax.set_ylabel(str(table.index.name or ""))
+    for i in range(table.shape[0]):
+        for j in range(table.shape[1]):
+            if np.isfinite(values[i, j]):
+                ax.text(j, i, fmt.format(values[i, j]), ha="center", va="center", fontsize=9)
+    fig.colorbar(image, ax=ax)
+    ax.set_title(title, fontsize=10)
     fig.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=110)

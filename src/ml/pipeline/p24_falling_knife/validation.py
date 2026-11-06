@@ -8,7 +8,7 @@ date**: whole months are resampled, never single trades.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -16,6 +16,24 @@ import pandas as pd
 from src.ml.pipeline.p24_falling_knife.config import CostModel
 
 N_BOOT = 2000
+SUSPECT_COLUMNS = ("suspect_gap", "suspect_in_trade")
+
+
+def clean_trades(trades: pd.DataFrame) -> pd.DataFrame:
+    """
+    Drop trades flagged as touching a suspected unadjusted corporate event (``SUSPECT_COLUMNS``).
+
+    Args:
+        trades: Trade rows.
+
+    Returns:
+        The unflagged rows.
+    """
+    keep = pd.Series(True, index=trades.index)
+    for column in SUSPECT_COLUMNS:
+        if column in trades.columns:
+            keep &= ~trades[column].fillna(False).astype(bool)
+    return trades[keep]
 
 
 def trade_metrics(trades: pd.DataFrame, column: str = "net_return") -> Dict[str, float]:
@@ -229,3 +247,54 @@ def evaluate_gate(system: pd.DataFrame, control: pd.DataFrame, costs: CostModel,
                           f"median {rest_m.get('median', float('nan')):.4f}"))
     out.append(GateResult("win_rate_vs_book", None, f"win rate {metrics.get('win_rate', float('nan')):.1%} (book claims >80%)"))
     return out
+
+
+def plateau_pick(grid: pd.DataFrame, dims: Sequence[str], objective: str = "median", min_trades: int = 100,
+                 tolerance: float = 0.25) -> Tuple[pd.DataFrame, Optional[int], bool]:
+    """
+    Pick a calibration cell on a plateau, not the single best cell (spec §7.3).
+
+    Neighbours of a cell differ by one grid step in exactly one dimension. A cell is on a plateau when every
+    neighbour's objective is within ``tolerance × |objective|`` of its own. The pick is the best plateau cell with at
+    least ``min_trades`` trades; if no cell qualifies, the cell whose worst neighbour is best (``plateau`` False).
+
+    Args:
+        grid: One row per cell with the ``dims`` columns, ``objective`` and ``n``.
+        dims: Grid dimension columns.
+        objective: Column to maximise.
+        min_trades: Minimum ``n`` of the picked cell.
+        tolerance: Allowed relative neighbour distance.
+
+    Returns:
+        ``(annotated grid, picked row position or None, plateau found)``. The annotated copy (index reset) adds ``neighbours``,
+        ``worst_neighbour`` and ``on_plateau``.
+    """
+    out = grid.reset_index(drop=True)
+    codes = np.column_stack([pd.Index(sorted(out[d].unique())).get_indexer(pd.Index(out[d])) for d in dims])
+    by_position = {tuple(int(c) for c in row): i for i, row in enumerate(codes)}
+    values = out[objective].to_numpy(dtype=float)
+    neighbours: List[int] = []
+    worst: List[float] = []
+    plateau: List[bool] = []
+    for i, row in enumerate(codes):
+        pos = tuple(int(c) for c in row)
+        found: List[float] = []
+        for k in range(len(dims)):
+            for delta in (-1, 1):
+                other = pos[:k] + (pos[k] + delta,) + pos[k + 1:]
+                if other in by_position:
+                    found.append(float(values[by_position[other]]))
+        own = float(values[i])
+        neighbours.append(len(found))
+        worst.append(min(found + [own]) if np.isfinite(own) else np.nan)
+        close = all(np.isfinite(v) and abs(v - own) <= tolerance * abs(own) for v in found)
+        plateau.append(bool(found) and bool(np.isfinite(own)) and close)
+    out["neighbours"], out["worst_neighbour"], out["on_plateau"] = neighbours, worst, plateau
+    enough = (out["n"].to_numpy() >= min_trades) & np.isfinite(values)
+    if not enough.any():
+        return out, None, False
+    on = enough & out["on_plateau"].to_numpy(dtype=bool)
+    if on.any():
+        return out, int(np.flatnonzero(on)[np.argmax(values[on])]), True
+    worst_arr = np.asarray(worst, dtype=float)
+    return out, int(np.flatnonzero(enough)[np.nanargmax(worst_arr[enough])]), False

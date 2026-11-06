@@ -25,9 +25,16 @@ backtest on the FMP vintage that tests the book's ">80% winners" claim against c
 
 # Specific symbols (any instrument type, e.g. the book's examples)
 .venv/Scripts/python.exe src/ml/pipeline/p24_falling_knife/jobs/run_p24_backtest.py --symbols MPWR VMW DIA QQQ --workers 1
+
+# Calibration grid on train 2022–2023 (spec §7.3), then the frozen run with the holdout
+.venv/Scripts/python.exe src/ml/pipeline/p24_falling_knife/jobs/run_p24_calibrate.py --workers 7 --run-id <run_id>
+.venv/Scripts/python.exe src/ml/pipeline/p24_falling_knife/jobs/run_p24_backtest.py --workers 7 --holdout     --calibration results/p24_falling_knife/calibration/<run_id>/calibration_frozen.json
 ```
+Calibration results land in `results/p24_falling_knife/calibration/<run_id>/` (`calibration_grid.csv`,
+`calibration_summary.md`, `calibration_frozen.json`, `charts/heatmap_*.png`). `--repick <dir> --frozen-shakeout off`
+re-picks from a saved grid without rerunning it.
 Results land in `results/p24_falling_knife/backtest/<run_id>/` (`trades_daily.csv`, `trades_weekly.csv`,
-`random_control_draws.csv`, `survivorship.csv`, `manifest.json`, `report.md`).
+`random_control_draws.csv`, `survivorship.csv`, `manifest.json`, `report.md`, `charts/samples/*.png`).
 
 ```python
 from src.ml.pipeline.p24_falling_knife.config import DAILY_PARAMS

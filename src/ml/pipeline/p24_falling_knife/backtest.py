@@ -2,7 +2,8 @@
 P24 Falling Knife — historical backtest on the FMP vintage (spec §6).
 
 Per security and timeframe the expensive part (indicators, swing points, channel width) is built once, then every
-ablation variant runs its own signal walk and trade simulation on the same context. The matched-random control (§6.4)
+ablation variant runs its trade simulation on the same context; variants that differ only in exit settings share one
+signal walk. The matched-random control (§6.4)
 re-enters each full-system signal's knife at random bars that also passed the 40% drop. Securities are processed in
 chunks by a process pool; each worker opens the vintage once.
 
@@ -59,6 +60,26 @@ class RunSpec:
     variants: Tuple[str, ...]
     include_holdout: bool
     as_of: Optional[date]
+    # Per-timeframe named overrides used instead of ``config.VARIANTS`` (calibration grid): timeframe -> variant ->
+    # overrides. None means the ablation variants.
+    variant_overrides: Optional[Dict[str, Dict[str, Dict[str, object]]]] = None
+    # Only keep signals in these periods (None: every period the run allows).
+    periods: Optional[Tuple[str, ...]] = None
+
+    def overrides(self, variant: str, timeframe: str) -> Dict[str, object]:
+        """
+        Parameter overrides of a variant on a timeframe.
+
+        Args:
+            variant: Variant name.
+            timeframe: ``daily`` or ``weekly``.
+
+        Returns:
+            Field overrides applied on top of the timeframe's parameters.
+        """
+        if self.variant_overrides is None:
+            return VARIANTS[variant]
+        return self.variant_overrides[timeframe][variant]
 
 
 def period_of(day: date, config: P24Config) -> Optional[str]:
@@ -147,16 +168,21 @@ def run_security(security: Security, daily: pd.DataFrame, spec: RunSpec, rng_see
             continue
         frame = compute_indicators(bars, base)
         contexts: Dict[Tuple[float, float], SeriesContext] = {}
+        walks: Dict[TimeframeParams, List[BarEval]] = {}
         for variant in spec.variants:
-            params = base.with_overrides(**VARIANTS[variant])
+            params = base.with_overrides(**spec.overrides(variant, timeframe))
             key = (params.zz_pct, params.support_bounce_pct)
             if key not in contexts:
                 contexts[key] = build_context(frame, params)
             ctx = contexts[key]
-            signals, _ = detect(ctx, params)
-            for sig in signals:
+            detection = params.detection_params()
+            if detection not in walks:
+                walks[detection] = detect(ctx, params)[0]
+            for sig in walks[detection]:
                 period = period_of(ctx.index[sig.t].date(), config)
                 if period is None or (period == HOLDOUT and not spec.include_holdout):
+                    continue
+                if spec.periods is not None and period not in spec.periods:
                     continue
                 trade = simulate_trade(ctx, sig, params, config.costs, delisted=security.delisted)
                 if trade is None:
