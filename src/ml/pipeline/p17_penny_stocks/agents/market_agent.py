@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 import pandas as pd
+import pandas_market_calendars as mcal
 import yfinance as yf
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
@@ -31,6 +32,8 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
+_XNYS = mcal.get_calendar("XNYS")
+
 
 def _safe_float(value, default: float | None = None) -> float | None:
     try:
@@ -38,6 +41,43 @@ def _safe_float(value, default: float | None = None) -> float | None:
         return v if v == v else default
     except (TypeError, ValueError):
         return default
+
+
+def _naive_dates(index: pd.Index) -> pd.DatetimeIndex:
+    """DatetimeIndex normalised to midnight, timezone dropped."""
+    idx = pd.DatetimeIndex(index)
+    if idx.tz is not None:
+        idx = idx.tz_localize(None)
+    return idx.normalize()
+
+
+def last_session_on_or_before(day: pd.Timestamp) -> pd.Timestamp:
+    """
+    Most recent NYSE trading session on or before ``day``.
+
+    Args:
+        day: Calendar date (time and timezone ignored).
+
+    Returns:
+        Tz-naive midnight timestamp of that session (weekends and exchange holidays roll back).
+    """
+    day = pd.Timestamp(day).normalize()
+    if day.tz is not None:
+        day = day.tz_localize(None)
+    sessions = _XNYS.valid_days(start_date=day - timedelta(days=14), end_date=day)
+    if len(sessions) == 0:
+        return day
+    return _naive_dates(sessions)[-1]
+
+
+def last_bar_date(df: pd.DataFrame) -> pd.Timestamp:
+    """Date (tz-naive midnight) of the last bar in a DatetimeIndex-ed OHLCV frame."""
+    return _naive_dates(df.index)[-1]
+
+
+def truncate_to(df: pd.DataFrame, day: pd.Timestamp) -> pd.DataFrame:
+    """Drop bars dated after ``day`` (no look-ahead for historical target dates)."""
+    return df.loc[_naive_dates(df.index) <= pd.Timestamp(day).normalize()]
 
 
 class MarketAgent:
@@ -90,50 +130,63 @@ class MarketAgent:
         """
         Serve 90-day daily OHLCV per ticker.
 
-        Cache-first: reads from UnifiedCache (DATA_CACHE_DIR/ohlcv/<symbol>/1d/).
-        Cache misses are batch-downloaded and written back to the cache.
+        Download-first: the post-filter universe (~150 names) is always batch-downloaded,
+        because the shared UnifiedCache (DATA_CACHE_DIR/ohlcv/<symbol>/1d/) cannot tell a
+        complete daily bar from a partial intraday one written by another job during market
+        hours, and the old 5-calendar-day freshness tolerance let ~half of the rows be scored
+        on 1–3-session-old bars. Fresh downloads are written back (overwriting partial bars).
+        The cache is only a fallback for tickers whose download fails, and then only if it
+        reaches the most recent NYSE session ≤ target_date. Bars after target_date are
+        dropped so historical ``--target-date`` runs see no future data.
+
+        Args:
+            tickers: Tickers that passed the universe hard filters.
+            force_refresh: Kept for interface compatibility; OHLCV is always re-downloaded.
         """
         end_dt = datetime.now(UTC)
         start_dt = end_dt - timedelta(days=self.config.ohlcv_lookback_days + 10)
-        # Data is considered fresh when it reaches within 5 calendar days of target_date
-        min_fresh = pd.Timestamp(self.target_date) - timedelta(days=5)
+        target = pd.Timestamp(self.target_date).normalize()
+        expected_session = last_session_on_or_before(target)
 
         cache = get_unified_cache()
         result: Dict[str, pd.DataFrame] = {}
-        missing: List[str] = []
 
-        if not force_refresh:
-            for ticker in tickers:
-                cached = cache.get(ticker, "1d", start_dt, end_dt)
-                if (
-                    cached is not None and not cached.empty and len(cached) >= 20 and cached.index[-1] >= min_fresh  # type: ignore[operator]
-                ):
-                    result[ticker] = self._to_technical_format(cached)
-                else:
-                    missing.append(ticker)
-        else:
-            missing = list(tickers)
-
-        if missing:
-            _logger.info(
-                "Batch OHLCV download: %d cache misses (cache hits: %d)",
-                len(missing),
-                len(result),
-            )
-            batch = self._downloader.get_ohlcv_batch(missing, "1d", start_dt, end_dt)
-            for ticker, df in batch.items():
-                if df is None or df.empty:
-                    continue
-                df_indexed = self._set_datetime_index(df)
-                if len(df_indexed) < 20:
-                    continue
+        _logger.info("Batch OHLCV download: %d tickers (expected last session %s)", len(tickers), expected_session.date())
+        batch = self._downloader.get_ohlcv_batch(tickers, "1d", start_dt, end_dt) if tickers else {}
+        for ticker, df in batch.items():
+            if df is None or df.empty:
+                continue
+            df_indexed = self._set_datetime_index(df)
+            try:
+                cache.put(df_indexed, ticker, "1d", start_dt, end_dt, provider="yahoo")
+            except Exception:
+                _logger.debug("Could not write %s to unified cache", ticker)
+            df_indexed = truncate_to(df_indexed, target)
+            if len(df_indexed) >= 20:
                 result[ticker] = self._to_technical_format(df_indexed)
-                try:
-                    cache.put(df_indexed, ticker, "1d", start_dt, end_dt, provider="yahoo")
-                except Exception:
-                    _logger.debug("Could not write %s to unified cache", ticker)
-        else:
-            _logger.info("OHLCV: all %d tickers served from unified cache", len(result))
+
+        fallback = [t for t in tickers if t not in result]
+        from_cache = 0
+        for ticker in fallback:
+            cached = cache.get(ticker, "1d", start_dt, end_dt)
+            if cached is None or cached.empty:
+                continue
+            cached = truncate_to(cached, target)
+            if len(cached) >= 20 and last_bar_date(cached) >= expected_session:
+                result[ticker] = self._to_technical_format(cached)
+                from_cache += 1
+        if fallback:
+            _logger.info("OHLCV: %d tickers failed to download; %d served from a fresh cache", len(fallback), from_cache)
+
+        # Halted names / Yahoo lag: still usable, but say so — their RVOL/breakouts describe an older day.
+        lagging = sorted(t for t, df in result.items() if last_bar_date(df) < expected_session)
+        if lagging:
+            _logger.warning(
+                "OHLCV: %d tickers still end before %s after download: %s",
+                len(lagging),
+                expected_session.date(),
+                ", ".join(lagging[:20]),
+            )
 
         _logger.info("OHLCV ready: %d/%d tickers have sufficient history", len(result), len(tickers))
         return result

@@ -11,9 +11,13 @@
 - [x] Extension gate - already-run names capped at Tier C, never EXPLOSIVE (2026-11-06, spec §11.1)
 - [x] Pre-breakout setup score, shadow mode + signal-ledger `p17_setup` stream (2026-11-06, spec §11.2)
 - [x] `replay.py` point-in-time replay with forward returns (2026-11-06)
+- [x] OHLCV always re-downloaded (no stale or partial intraday bars from the shared cache), no look-ahead past
+  `target_date` (2026-11-07, CR-2026-11-06 §5)
 
 ### 🔄 IN PROGRESS
-- [ ] Deploy the extension gate to the Pi and confirm the first runs (fewer Tier A/B emails, `extended` counts in log)
+- [x] Deploy the extension gate to the Pi (2026-11-07)
+- [ ] Deploy the OHLCV freshness fix; confirm the log shows one full batch download and few/no lagging tickers
+- [ ] Confirm the first gated runs (fewer Tier A/B emails, `extended=` / `setups=` in the `Result:` log line)
 - [ ] Watch the signal-ledger scorecard for `p17_tier_ab` (gated) and `p17_setup` once ≥ 20 cohorts mature
 
 ### 🚀 PLANNED ENHANCEMENTS
@@ -25,8 +29,8 @@
 - [ ] Strategy automation resume point (spec §15.2): walk-forward, paper trading, gap-risk model
 
 ## Technical Debt
-- [ ] MarketAgent OHLCV cache accepts bars up to 5 calendar days old (`min_fresh`); ~47% of prod rows were scored on
-  1–3-session-stale bars, which delays signals further. Require the last bar to be the last trading day ≤ target date.
+- [ ] Shared UnifiedCache stores partial intraday daily bars for every pipeline that reads it during market hours
+  (P17 now bypasses it; other readers are still exposed) — consider a "complete after close" marker in the cache
 - [ ] Tier A practically never fires (spec §24.5 calibration decision still open)
 - [ ] `ReportingAgent.get_alert_candidates` and `P17AlertConfig.min_alert_score` are unused
 
@@ -39,7 +43,7 @@
 ## Testing Requirements
 - [x] Unit tests for scoring (incl. extension gate and setup), technicals (incl. setup features), replay helpers,
   notification, catalyst, config, pipeline, backtest, strategy sim
-- [ ] Test for the OHLCV freshness rule once fixed
+- [x] Tests for the OHLCV freshness rule (`tests/test_market_agent.py`)
 
 ## Documentation Updates
 - [x] README / Requirements / Design / Tasks (2026-11-06)
