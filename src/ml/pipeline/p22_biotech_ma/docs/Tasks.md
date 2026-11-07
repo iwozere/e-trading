@@ -883,6 +883,14 @@ use in the code/config; this section exists so they're all in one place to walk 
   not attributed (MacroGenics/ImmunoGen, Akari/Celsus); GENETIC-type interventions (gene therapy)
   are not asset candidates; the raw zone names payloads by content hash, so two companies with
   byte-identical hit lists share one manifest.
+- **ADDED 2026-11-07: `deal_entry_cli amend` + first full label import.** The reviewed prefill CSV was
+  imported on prod 2026-11-07 (532 deals, 1,290 links, 877 rejects). Corrections after import go through
+  `amend DEAL_ID [--by-item] --reviewer R --<field> VALUE` (`ingest/deal_entry.py::amend_deal`): the stored
+  row is rebuilt as an entry, the changed fields applied (`-` clears one), validated like a new entry,
+  premiums and review flags re-derived, and a positive label still needs `--ack-flags` when flags fire.
+  The acquirer-private hand inputs are not columns, so they are recovered from `review_flags`; renaming
+  the acquirer without a CIK drops the stale `acquirer_id`. Moving the announcement date onto another
+  deal of the same target is refused.
 - **ADDED 2026-11-05: deal-label pre-fill (`deal_entry_cli prefill`).** 2,699 pending deal candidates
   (684 companies) would otherwise be typed in by hand from blank `export` columns. `ingest/deal_prefill.py`
   does spec §2.5 step 2 (parse) so the reviewer only does step 3 (hand-verify): filings are grouped into

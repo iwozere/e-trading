@@ -15,6 +15,7 @@ from src.ml.pipeline.p22_biotech_ma.ingest.deal_entry import (
     DealEntryError,
     DuplicateDealError,
     ReviewFlagsNotAcknowledgedError,
+    amend_deal,
     entry_from_mapping,
     evaluate_flags,
     find_link_target,
@@ -90,6 +91,9 @@ class _FakeRepo:
 
     def resolve_review_item(self, **kwargs: Any) -> None:
         self.resolved.append(kwargs)
+
+    def update_deal(self, deal_id: int, **fields: Any) -> None:
+        self.deals[deal_id].update(fields)
 
 
 def _item(item_id: int = 1, status: str = "pending", filed: str = "2024-01-10") -> Dict[str, Any]:
@@ -260,6 +264,63 @@ def test_record_deal_refuses_duplicate_and_resolved_items():
         record_deal(repo, _item(2), _entry(), entered_by="ak")
     with pytest.raises(DealEntryError, match="already confirmed"):
         record_deal(repo, _item(3, status="confirmed"), _entry(), entered_by="ak")
+
+
+def test_amend_deal_rederives_premium_and_keeps_untouched_fields():
+    repo = _FakeRepo(closes={_ANNOUNCED - timedelta(days=1): 100.0})
+    deal_id = record_deal(repo, _item(), _entry(has_cvr=True, cvr_max_per_share=5.0, note="old"), entered_by="ak")["deal_id"]
+    result = amend_deal(repo, deal_id, {"upfront_per_share": "130", "cvr_max_per_share": "20.65", "note": "final terms"},
+                        amended_by="ak")
+    deal = repo.deals[deal_id]
+    assert result["before"]["upfront_per_share"] == 115.0
+    assert deal["upfront_per_share"] == 130.0
+    assert deal["premium_1d"] == pytest.approx(0.30)
+    assert deal["cvr_max_per_share"] == 20.65
+    assert deal["has_cvr"] is True
+    assert deal["acquirer_id"] == 99
+    assert deal["note"] == "final terms"
+
+
+def test_amend_deal_clears_field_and_drops_stale_acquirer_link():
+    repo = _FakeRepo()
+    deal_id = record_deal(repo, _item(), _entry(has_cvr=True, cvr_max_per_share=5.0), entered_by="ak")["deal_id"]
+    amend_deal(repo, deal_id, {"cvr_max_per_share": "-", "has_cvr": "no", "acquirer_name": "argenx BV"}, amended_by="ak")
+    deal = repo.deals[deal_id]
+    assert deal["cvr_max_per_share"] is None and deal["has_cvr"] is False
+    assert deal["acquirer_name"] == "argenx BV" and deal["acquirer_id"] is None
+
+
+def test_amend_deal_moves_announcement_date_but_refuses_collision():
+    repo = _FakeRepo()
+    first = record_deal(repo, _item(1), _entry(announcement_date=date(2020, 5, 1)), entered_by="ak")["deal_id"]
+    second = record_deal(repo, _item(2), _entry(), entered_by="ak")["deal_id"]
+    amend_deal(repo, second, {"announcement_date": "2024-01-10"}, amended_by="ak")
+    assert repo.deals[second]["announcement_date"] == date(2024, 1, 10)
+    with pytest.raises(DuplicateDealError):
+        amend_deal(repo, second, {"announcement_date": "2020-05-01"}, amended_by="ak")
+    assert repo.deals[first]["announcement_date"] == date(2020, 5, 1)
+
+
+def test_amend_deal_blocks_flagged_strategic_acquisition_and_keeps_private_acquirer_inputs():
+    repo = _FakeRepo()
+    entry = _entry(deal_type="pe_take_private", acquirer_cik=None, acquirer_is_private=True, acquirer_has_approved_product=False)
+    deal_id = record_deal(repo, _item(), entry, entered_by="ak")["deal_id"]
+    with pytest.raises(ReviewFlagsNotAcknowledgedError):
+        amend_deal(repo, deal_id, {"deal_type": "strategic_acquisition"}, amended_by="ak")
+    assert repo.deals[deal_id]["deal_type"] == "pe_take_private"
+    amend_deal(repo, deal_id, {"deal_type": "strategic_acquisition"}, amended_by="ak", acknowledge_flags=True)
+    assert repo.deals[deal_id]["review_flags"]["fired"] == ["acquirer_private_no_product"]
+
+
+def test_amend_deal_rejects_unknown_deal_field_and_empty_change():
+    repo = _FakeRepo()
+    deal_id = record_deal(repo, _item(), _entry(), entered_by="ak")["deal_id"]
+    with pytest.raises(DealEntryError, match="not found"):
+        amend_deal(repo, 999, {"note": "x"}, amended_by="ak")
+    with pytest.raises(DealEntryError, match="Cannot amend"):
+        amend_deal(repo, deal_id, {"premium_1d": "0.5"}, amended_by="ak")
+    with pytest.raises(DealEntryError, match="Nothing to amend"):
+        amend_deal(repo, deal_id, {"note": None}, amended_by="ak")
 
 
 def test_link_candidate_picks_latest_deal_announced_before_filing():

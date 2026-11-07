@@ -54,7 +54,11 @@ python -m src.ml.pipeline.p22_biotech_ma.cli.deal_entry_cli scan --start 2010-01
 python -m src.ml.pipeline.p22_biotech_ma.cli.deal_entry_cli export deals.csv
 python -m src.ml.pipeline.p22_biotech_ma.cli.deal_entry_cli import deals.csv --reviewer ak --dry-run
 python -m src.ml.pipeline.p22_biotech_ma.cli.deal_entry_cli list-deals
+python -m src.ml.pipeline.p22_biotech_ma.cli.deal_entry_cli amend 6468 --by-item --reviewer ak --upfront-per-share 65.60
 ```
+
+`amend` corrects an already-entered deal (by `deal_id`, or by the review item it came from with
+`--by-item`); premiums and reverse-merger flags are re-derived, `-` clears a field.
 
 Phase 1 scoring (spec §5.1–5.2, M4) runs daily as the `P22 Scoring` job and can be run by hand;
 weights live in `config/pipeline/p22_weights.yaml`:

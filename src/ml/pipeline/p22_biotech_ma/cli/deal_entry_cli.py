@@ -54,10 +54,13 @@ from src.ml.pipeline.p22_biotech_ma.ingest.activist_positions import parse_sourc
 from src.ml.pipeline.p22_biotech_ma.ingest.deal_candidates import run as run_deal_candidates
 from src.ml.pipeline.p22_biotech_ma.ingest.deal_coverage import CLASSIFICATIONS, classify, latest_candidates
 from src.ml.pipeline.p22_biotech_ma.ingest.deal_entry import (
+    AMENDABLE_FIELDS,
+    CLEAR_VALUE,
     DEAL_STATUSES,
     DEAL_TYPES,
     DealContext,
     DealEntryError,
+    amend_deal,
     entry_from_mapping,
     gather_context,
     link_candidate,
@@ -162,6 +165,27 @@ def _cmd_enter(args: argparse.Namespace) -> int:
         item = _load_candidate(uow, args.item_id)
         result = record_deal(uow.p22, item, entry, entered_by=args.reviewer, acknowledge_flags=args.ack_flags)
     _logger.info("Recorded deal_id=%s from item %s", result["deal_id"], args.item_id)
+    _logger.info("%s", _format_context(result["context"]))
+    return 0
+
+
+def _cmd_amend(args: argparse.Namespace) -> int:
+    changes = {name: getattr(args, name, None) for name in AMENDABLE_FIELDS}
+    with DatabaseService().uow() as uow:
+        deal_id = args.deal_id
+        if args.by_item:
+            deal = uow.p22.find_deal_by_review_item(args.deal_id)
+            if deal is None:
+                raise DealEntryError(f"No deal was entered from review item {args.deal_id}")
+            deal_id = int(deal["deal_id"])
+        result = amend_deal(uow.p22, deal_id, changes, amended_by=args.reviewer, acknowledge_flags=args.ack_flags)
+        after = uow.p22.get_deal(deal_id) or {}
+    before = result["before"]
+    for name in ("announcement_date", "deal_type", "acquirer_name", "status", "upfront_per_share", "has_cvr",
+                 "cvr_max_per_share", "stock_consideration_pct", "target_holders_pct", "premium_1d", "premium_30d", "note"):
+        if before.get(name) != after.get(name):
+            _logger.info("  %s: %s -> %s", name, before.get(name), after.get(name))
+    _logger.info("Amended deal_id=%s", deal_id)
     _logger.info("%s", _format_context(result["context"]))
     return 0
 
@@ -444,6 +468,22 @@ def build_parser() -> argparse.ArgumentParser:
     enter.add_argument("--ack-flags", dest="ack_flags", action="store_true",
                        help="Enter a strategic_acquisition even though reverse-merger heuristics fired")
     enter.set_defaults(func=_cmd_enter)
+
+    amend = sub.add_parser("amend", help="Correct an entered deal; premiums and review flags are re-derived")
+    amend.add_argument("deal_id", type=int, help="p22_deal.deal_id (or the review item id with --by-item)")
+    amend.add_argument("--by-item", dest="by_item", action="store_true", help="deal_id is the review item the deal came from")
+    amend.add_argument("--reviewer", required=True)
+    amend.add_argument("--ack-flags", dest="ack_flags", action="store_true",
+                       help="Keep a strategic_acquisition even though reverse-merger heuristics fire")
+    amend.add_argument("--announcement-date", dest="announcement_date")
+    amend.add_argument("--deal-type", dest="deal_type", choices=DEAL_TYPES)
+    amend.add_argument("--acquirer-name", dest="acquirer_name")
+    amend.add_argument("--acquirer-cik", dest="acquirer_cik")
+    amend.add_argument("--status", choices=DEAL_STATUSES)
+    for flag in ("completion-date", "upfront-per-share", "has-cvr", "cvr-max-per-share", "stock-consideration-pct",
+                 "target-holders-pct", "acquirer-is-private", "acquirer-has-approved-product", "note"):
+        amend.add_argument(f"--{flag}", dest=flag.replace("-", "_"), help=f"'{CLEAR_VALUE}' clears the field")
+    amend.set_defaults(func=_cmd_amend)
 
     link = sub.add_parser("link", help="Confirm a candidate as another filing of an existing deal")
     link.add_argument("item_id", type=int)

@@ -900,6 +900,18 @@ class P22Repo:
             return None
         return {c.key: getattr(row, c.key) for c in P22Deal.__table__.columns}
 
+    def update_deal(self, deal_id: int, **fields: Any) -> None:
+        """Overwrite columns of one `p22_deal` row (hand amendment via `deal_entry_cli amend`)."""
+        self.session.execute(update(P22Deal).where(P22Deal.deal_id == deal_id).values(**fields))
+        self.session.flush()
+
+    def find_deal_by_review_item(self, review_item_id: int) -> Optional[Dict[str, Any]]:
+        """The deal entered from review item `review_item_id`, if any."""
+        row = self.session.execute(select(P22Deal).where(P22Deal.review_item_id == review_item_id)).scalars().first()
+        if row is None:
+            return None
+        return {c.key: getattr(row, c.key) for c in P22Deal.__table__.columns}
+
     def find_deal(self, target_id: int, announcement_date: date) -> Optional[Dict[str, Any]]:
         """The deal already entered for `(target_id, announcement_date)`, if any (unique per migration 011)."""
         row = self.session.execute(

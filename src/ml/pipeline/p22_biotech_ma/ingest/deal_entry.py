@@ -421,6 +421,129 @@ def record_deal(
     return {"deal_id": deal_id, "context": context}
 
 
+AMENDABLE_FIELDS = (
+    "announcement_date", "deal_type", "acquirer_name", "acquirer_cik", "status", "completion_date",
+    "upfront_per_share", "has_cvr", "cvr_max_per_share", "stock_consideration_pct", "target_holders_pct",
+    "acquirer_is_private", "acquirer_has_approved_product", "note",
+)
+CLEAR_VALUE = "-"
+
+
+def _text(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if isinstance(value, date):
+        return value.isoformat()
+    return str(value)
+
+
+def _stored_acquirer_inputs(deal: Dict[str, Any]) -> Dict[str, Optional[str]]:
+    """Recover the `acquirer_private_no_product` hand inputs (not stored as columns) from `review_flags`."""
+    flags = deal.get("review_flags") or {}
+    if "acquirer_private_no_product" in (flags.get("fired") or []):
+        return {"acquirer_is_private": "yes", "acquirer_has_approved_product": "no"}
+    if "acquirer_private_no_product" in (flags.get("unchecked") or []):
+        return {"acquirer_is_private": None, "acquirer_has_approved_product": None}
+    return {"acquirer_is_private": "no", "acquirer_has_approved_product": None}
+
+
+def _deal_as_fields(deal: Dict[str, Any]) -> Dict[str, Optional[str]]:
+    """A stored `p22_deal` row as the string mapping `entry_from_mapping` takes."""
+    fields: Dict[str, Optional[str]] = {
+        name: _text(deal.get(name))
+        for name in AMENDABLE_FIELDS
+        if name not in ("acquirer_cik", "acquirer_is_private", "acquirer_has_approved_product")
+    }
+    fields.update(_stored_acquirer_inputs(deal))
+    return fields
+
+
+def amend_deal(
+    repo: Any,
+    deal_id: int,
+    changes: Mapping[str, Optional[str]],
+    *,
+    amended_by: str,
+    acknowledge_flags: bool = False,
+) -> Dict[str, Any]:
+    """
+    Correct fields of an already-entered deal and re-derive premiums and review flags.
+
+    Args:
+        repo: A `P22Repo`-shaped object.
+        deal_id: The `p22_deal` row to amend.
+        changes: Field name -> new string value (the `entry_from_mapping` formats); None leaves a field
+            as stored, `CLEAR_VALUE` ("-") blanks it.
+        amended_by: Reviewer identifier (logged).
+        acknowledge_flags: Required when the amended deal is a `strategic_acquisition` and flags fire.
+
+    Returns:
+        `{"deal_id": int, "before": dict, "context": DealContext}`.
+
+    Raises:
+        DealEntryError: unknown deal or field, invalid result, or the new announcement date collides with
+            another deal of the same target; `ReviewFlagsNotAcknowledgedError` as in `record_deal`.
+    """
+    stored = repo.get_deal(deal_id)
+    if stored is None:
+        raise DealEntryError(f"deal_id={deal_id} not found")
+    deal = dict(stored)  # snapshot: "before" must survive the update
+    unknown = sorted(set(changes) - set(AMENDABLE_FIELDS))
+    if unknown:
+        raise DealEntryError(f"Cannot amend {unknown}; amendable fields: {list(AMENDABLE_FIELDS)}")
+    given = {name: value for name, value in changes.items() if value is not None}
+    if not given:
+        raise DealEntryError("Nothing to amend")
+
+    fields = _deal_as_fields(deal)
+    fields.update({name: (None if value == CLEAR_VALUE else value) for name, value in given.items()})
+    entry = entry_from_mapping(fields)
+
+    if entry.announcement_date != deal["announcement_date"]:
+        other = repo.find_deal(deal["target_id"], entry.announcement_date)
+        if other is not None and other["deal_id"] != deal_id:
+            raise DuplicateDealError(
+                f"Deal {other['deal_id']} already exists for company {deal['target_id']} announced {entry.announcement_date}"
+            )
+
+    context = gather_context(repo, int(deal["target_id"]), entry)
+    if entry.deal_type == POSITIVE_DEAL_TYPE and context.flags_fired and not acknowledge_flags:
+        raise ReviewFlagsNotAcknowledgedError(
+            f"Reverse-merger heuristics fired for a strategic_acquisition: {context.flags_fired}. "
+            "Re-read the filing; if it really is a strategic acquisition, acknowledge the flags."
+        )
+
+    if "acquirer_cik" in given:
+        acquirer_id = _resolve_acquirer_id(repo, entry.acquirer_cik)
+    elif "acquirer_name" in given:
+        acquirer_id = None  # a different acquirer without a CIK: the old company link no longer applies
+    else:
+        acquirer_id = deal.get("acquirer_id")
+
+    repo.update_deal(
+        deal_id,
+        acquirer_id=acquirer_id,
+        acquirer_name=entry.acquirer_name,
+        announcement_date=entry.announcement_date,
+        completion_date=entry.completion_date,
+        upfront_per_share=entry.upfront_per_share,
+        has_cvr=entry.has_cvr,
+        cvr_max_per_share=entry.cvr_max_per_share,
+        premium_1d=context.premium_1d,
+        premium_30d=context.premium_30d,
+        status=entry.status,
+        deal_type=entry.deal_type,
+        stock_consideration_pct=entry.stock_consideration_pct,
+        target_holders_pct=entry.target_holders_pct,
+        review_flags=context.review_flags_json(),
+        note=entry.note,
+    )
+    _logger.info("Amended deal %s by %s: %s; flags %s", deal_id, amended_by, sorted(given), context.flags_fired)
+    return {"deal_id": deal_id, "before": deal, "context": context}
+
+
 def find_link_target(repo: Any, item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """The deal a further filing most plausibly belongs to: the same company's latest deal announced on
     or before the filing date. None if the company has no deal yet."""
