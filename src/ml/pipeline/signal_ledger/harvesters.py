@@ -18,7 +18,7 @@ import re
 import sqlite3
 from datetime import date
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Hashable, Iterator, List, Mapping, Optional, Tuple
 
 import pandas as pd
 
@@ -270,6 +270,53 @@ def harvest_p24(results_root: Path, since: Optional[date]) -> List[SignalRecord]
     return records
 
 
+# P22 flags takeover candidates; a deal can take a year to surface, so the book holds ~12 months.
+_P22_HORIZON_DAYS = 250
+
+
+def _p22_tiered(path: Path) -> Optional[Dict[str, Mapping[Hashable, Any]]]:
+    """Return ``{ticker: row}`` for tier 1-3 rows of one P22 watchlist, or None if unreadable."""
+    df = _read_csv(path)
+    if df is None or "ticker" not in df or "tier" not in df:
+        return None
+    tiered: Dict[str, Mapping[Hashable, Any]] = {}
+    for row in df.to_dict("records"):
+        ticker = clean_ticker(row.get("ticker"))
+        tier = _optional_float(row.get("tier"))
+        if ticker and tier is not None and tier >= 1:
+            tiered[ticker] = row
+    return tiered
+
+
+def harvest_p22(results_root: Path, since: Optional[date]) -> List[SignalRecord]:
+    """
+    P22 Biotech M&A ``watchlist.csv``: one signal when a ticker enters tiers 1-3.
+
+    The watchlist is re-published daily with the same names, so only entries are
+    signals (new to the tiered set versus the previous readable watchlist, or a
+    re-entry after dropping out). The archive is small, so it is always scanned
+    from the start to know the previous day's set; ``since`` only filters output.
+    """
+    records: List[SignalRecord] = []
+    previous: set[str] = set()
+    for day, path in dated_files(results_root / "p22_biotech_ma", "watchlist.csv", None):
+        tiered = _p22_tiered(path)
+        if tiered is None:
+            continue
+        if since is None or day >= since:
+            for ticker in sorted(set(tiered) - previous):
+                row = tiered[ticker]
+                rank = _optional_float(row.get("rank_by_composite"))
+                records.append(SignalRecord(
+                    pipeline="p22", source="p22_tier_entry", signal_date=day, ticker=ticker,
+                    rank=int(rank) if rank is not None else None,
+                    score=_optional_float(row.get("composite")), horizon_days=_P22_HORIZON_DAYS,
+                    meta={"tier": int(row["tier"]), "tier_reason": str(row.get("tier_reason", ""))},
+                ))
+        previous = set(tiered)
+    return records
+
+
 HARVESTERS: Dict[str, Callable[[Path, Optional[date]], List[SignalRecord]]] = {
     "p05": harvest_p05,
     "p06": harvest_p06,
@@ -277,6 +324,7 @@ HARVESTERS: Dict[str, Callable[[Path, Optional[date]], List[SignalRecord]]] = {
     "p17": harvest_p17,
     "p19": harvest_p19,
     "p21": harvest_p21,
+    "p22": harvest_p22,
     "p24": harvest_p24,
 }
 

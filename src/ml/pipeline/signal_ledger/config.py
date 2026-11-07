@@ -42,6 +42,8 @@ COST_BPS: Dict[str, float] = {
     # P24 trades crashed names: tiered costs average ~0.3% per side in the backtest.
     "p24_daily": 60.0,
     "p24_weekly": 60.0,
+    # P22 names are small/mid-cap biotechs: wider spreads than large caps.
+    "p22_tier_entry": 60.0,
 }
 
 # Nightly harvest only rescans recent result folders; --full rescans everything (backfill).

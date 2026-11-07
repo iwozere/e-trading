@@ -10,7 +10,8 @@ Pipelines are **not** modified — the ledger harvests the files they already wr
 
 ## Features
 - Harvesters for P05 (`top_picks.csv`), P06 (phase-2 alerts, final universe), P10 (PASSED universe), P17 (candidates,
-  tier in meta), P19 (T1–T3 momentum alerts from `shadow.sqlite`) and P21 (`targets.json`).
+  tier in meta), P19 (T1–T3 momentum alerts from `shadow.sqlite`), P21 (`targets.json`), P22 (`watchlist.csv`, a signal
+  only when a ticker enters tiers 1–3; held ~12 months) and P24 (`signals_daily.csv` / `signals_weekly.csv`).
 - Forward returns at 1/5/10/20 sessions: entry at the next session's open, exit at the close; VT/SPY/IWM over the same window.
 - Scorecard per stream: mean/median excess after a per-stream cost, hit rate, Newey-West t of daily cohorts, verdict
   (`edge`, `negative`, `no_edge`, `insufficient`).

@@ -32,6 +32,8 @@ SUB_STREAMS: Dict[str, tuple[str, Predicate]] = {
     "p17_tier_ab": ("p17_candidates", lambda row: (row.get("meta") or {}).get("tier") in ("A", "B")),
     "p17_setup": ("p17_candidates", lambda row: bool((row.get("meta") or {}).get("setup"))),
     "p17_fresh_13g": ("p17_candidates", lambda row: bool((row.get("meta") or {}).get("fresh_13g"))),
+    # P22 tier 3 = a disclosed sale process, the strongest takeover evidence.
+    "p22_tier3": ("p22_tier_entry", lambda row: (row.get("meta") or {}).get("tier") == 3),
 }
 
 

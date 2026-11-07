@@ -31,6 +31,10 @@ Yahoo daily bars --> PriceCache (parquet) ---------+--> evaluator --> signal_led
 - `signal_date` = the results folder date. Entry = open of the first session strictly after it. For P05 (runs before the US
   open of its folder date) this is one day conservative; for P06/P10/P17 (folder = previous session) it is the next open.
 - P19 alerts fire intraday; the ledger still enters at the next open ("buy the day after the alert").
+- P22 republishes the same ~500-name watchlist daily, so only **tier entries** are signals: a ticker in tiers 1–3 that was
+  not tiered in the previous readable watchlist (re-entry after dropping out counts again). The harvester always scans the
+  whole (small) P22 archive to know the previous set; `since` only filters the output. Book horizon 250 sessions.
+- P15 is not harvested: it is a data-download bundle (prices, options, GDELT, EDGAR, FRED) with no buy signals.
 - Outcomes freeze once all horizons are known (`status = complete`); `no_data` after 10 days without an entry price.
 - Benchmarks are measured over the identical window; excess = side × (ticker − benchmark) − round-trip cost.
 
@@ -42,7 +46,8 @@ Yahoo daily bars --> PriceCache (parquet) ---------+--> evaluator --> signal_led
 - **5× jump guard.** Penny-stock reverse splits that Yahoo never adjusted produced +5,000 % "returns" (IPDN, GMEX); 48 such
   jumps in 28 tickers over the archive. Flagged rows stay visible but do not count.
 - **Long-only book.** Short recommendations (rare P05 `bias=short`) are scored but not traded in the book.
-- **Costs per stream.** 10 bps round trip for liquid names, 30 bps for P06/P10 small caps, 100 bps for P17/P19 penny stocks.
+- **Costs per stream.** 10 bps round trip for liquid names, 30 bps for P06/P10 small caps, 60 bps for P22/P24,
+  100 bps for P17/P19 penny stocks.
 - **Book NAV fully rebuilt nightly.** Cheap (seconds) and keeps it consistent with any re-harvested signal.
 
 ## Integration Patterns

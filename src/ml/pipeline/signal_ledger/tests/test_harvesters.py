@@ -95,6 +95,29 @@ def test_missing_pipelines_yield_nothing(tmp_path: Path) -> None:
     assert harvest_all(tmp_path) == []
 
 
+def test_harvest_p22_emits_only_tier_entries(tmp_path: Path) -> None:
+    from src.ml.pipeline.signal_ledger.harvesters import harvest_p22
+
+    header = "rank_by_composite,ticker,composite,tier,tier_reason\n"
+    base = tmp_path / "p22_biotech_ma"
+    _write(base / "2026-11-03/watchlist.csv", header + "1,AAA,0.9,0,fundamentals_only\n2,BBB,0.8,0,fundamentals_only\n")
+    _write(base / "2026-11-04/watchlist.csv", header + "1,AAA,3.5,3,disclosed_sale_process\n2,BBB,0.8,0,fundamentals_only\n")
+    _write(base / "2026-11-05/pipeline.log", "no watchlist this day\n")
+    _write(base / "2026-11-06/watchlist.csv", header + "1,AAA,3.5,3,disclosed_sale_process\n2,BBB,2.7,2,strategic_toehold\n")
+    _write(base / "2026-11-07/watchlist.csv", header + "1,BBB,2.7,2,strategic_toehold\n2,AAA,0.9,0,fundamentals_only\n")
+    _write(base / "2026-11-08/watchlist.csv", header + "1,AAA,3.4,3,disclosed_sale_process\n")
+
+    records = harvest_p22(tmp_path, since=None)
+
+    assert [(r.signal_date, r.ticker) for r in records] == [
+        (date(2026, 11, 4), "AAA"), (date(2026, 11, 6), "BBB"), (date(2026, 11, 8), "AAA"),
+    ]
+    first = records[0]
+    assert (first.source, first.rank, first.score, first.horizon_days) == ("p22_tier_entry", 1, 3.5, 250)
+    assert first.meta == {"tier": 3, "tier_reason": "disclosed_sale_process"}
+    assert [r.ticker for r in harvest_p22(tmp_path, since=date(2026, 11, 6))] == ["BBB", "AAA"]
+
+
 def test_harvest_p24_reads_both_timeframes_and_skips_suspect(tmp_path: Path) -> None:
     from src.ml.pipeline.signal_ledger.harvesters import harvest_p24
 
