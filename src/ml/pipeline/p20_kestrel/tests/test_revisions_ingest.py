@@ -4,7 +4,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from src.ml.pipeline.p20_kestrel.ingest import revisions_ingest
+from src.ml.pipeline.p20_kestrel.ingest import finnhub_client, revisions_ingest
 from src.ml.pipeline.p20_kestrel.ingest.revisions_ingest import (
     _compute_ticker_signals,
     _eps_delta_points,
@@ -404,14 +404,14 @@ def test_run_upserts_in_chunks_and_reports_fmp_availability(monkeypatch, run_env
 def test_throttle_spaces_calls(monkeypatch):
     clock = [100.0]
     sleeps: list[float] = []
-    monkeypatch.setattr(revisions_ingest.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(finnhub_client.time, "monotonic", lambda: clock[0])
 
     def _sleep(s):
         sleeps.append(s)
         clock[0] += s
 
-    monkeypatch.setattr(revisions_ingest.time, "sleep", _sleep)
-    throttle = revisions_ingest._Throttle(1.1)
+    monkeypatch.setattr(finnhub_client.time, "sleep", _sleep)
+    throttle = finnhub_client.FinnhubThrottle(1.1)
 
     throttle.wait()
     clock[0] += 0.3
@@ -425,8 +425,8 @@ def test_finnhub_429_retried_once_when_throttled(monkeypatch):
             for m in (5, 6, 7, 8)]
     responses = iter([_FakeResponse(429, {}), _FakeResponse(200, rows)])
     monkeypatch.setattr(revisions_ingest.requests, "get", lambda *a, **kw: next(responses))
-    monkeypatch.setattr(revisions_ingest.time, "sleep", lambda s: None)
+    monkeypatch.setattr(finnhub_client.time, "sleep", lambda s: None)
 
-    result = _fetch_finnhub_momentum("NVDA", "k", revisions_ingest._Throttle(0))
+    result = _fetch_finnhub_momentum("NVDA", "k", finnhub_client.FinnhubThrottle(0))
 
     assert result is not None and result > 0

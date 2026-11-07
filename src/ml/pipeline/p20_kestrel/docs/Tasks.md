@@ -19,6 +19,9 @@
   → old row `cancelled` (natural key includes `event_date`, so moves left stale "upcoming" duplicates — 380/863
   rows were past-dated, 165 tickers had several earnings rows). Repo: `mark_past_catalysts_passed`,
   `cancel_superseded_catalysts`.
+- [x] Finnhub pacing shared in `ingest/finnhub_client.py` (1.1 s between calls, one retry after a 429): catalyst sync
+  fired ~7 calls/s against the 60/min free tier, so most tickers silently got no earnings dates (upserts 34-227 per
+  run). Failed fetches are now counted (`finnhub_fetch_failures`) and never treated as "no earnings". Job timeout 900 s.
 - [x] `sentiment/alias_builder.py` — Company alias table + legal-name normalization
 - [x] `sentiment/gdelt_processor.py` — GKG z-score pipeline with fuzzy matching
 - [x] `sentiment/social_poll.py` — StockTwits/Reddit/ApeWisdom with rate limiting

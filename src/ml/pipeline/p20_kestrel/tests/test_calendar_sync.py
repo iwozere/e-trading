@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from src.ml.pipeline.p20_kestrel.ingest import calendar_sync
+from src.ml.pipeline.p20_kestrel.ingest import calendar_sync, finnhub_client
 from src.ml.pipeline.p20_kestrel.ingest.calendar_sync import run
 
 _TODAY = date(2026, 10, 13)
@@ -102,7 +102,7 @@ def test_sync_ticker_cancels_moved_earnings_dates(monkeypatch):
     upserts: list = []
     cancels: list = []
     monkeypatch.setattr(calendar_sync, "_fetch_finnhub_earnings",
-                        lambda t, k: [{"date": "2026-11-11", "epsEstimate": 0.1}, {"date": "bad"}, {"date": ""}])
+                        lambda t, k, th=None: [{"date": "2026-11-11", "epsEstimate": 0.1}, {"date": "bad"}, {"date": ""}])
     monkeypatch.setattr(calendar_sync, "upsert_catalyst", lambda row: upserts.append(row))
     monkeypatch.setattr(calendar_sync, "cancel_superseded_catalysts", lambda *a: cancels.append(a) or 1)
 
@@ -114,15 +114,55 @@ def test_sync_ticker_cancels_moved_earnings_dates(monkeypatch):
 
 
 def test_sync_ticker_never_cancels_on_empty_fetch(monkeypatch):
-    monkeypatch.setattr(calendar_sync, "_fetch_finnhub_earnings", lambda t, k: [])
+    monkeypatch.setattr(calendar_sync, "_fetch_finnhub_earnings", lambda t, k, th=None: [])
     monkeypatch.setattr(calendar_sync, "cancel_superseded_catalysts", lambda *a: pytest.fail("must not cancel"))
     assert calendar_sync._sync_ticker_earnings("ADMA", "key", _TODAY) == (0, 0)
 
 
 def test_sync_ticker_does_not_reopen_past_dates(monkeypatch):
     upserts: list = []
-    monkeypatch.setattr(calendar_sync, "_fetch_finnhub_earnings", lambda t, k: [{"date": "2026-10-01"}])
+    monkeypatch.setattr(calendar_sync, "_fetch_finnhub_earnings", lambda t, k, th=None: [{"date": "2026-10-01"}])
     monkeypatch.setattr(calendar_sync, "upsert_catalyst", lambda row: upserts.append(row))
     monkeypatch.setattr(calendar_sync, "cancel_superseded_catalysts", lambda *a: 0)
     calendar_sync._sync_ticker_earnings("ADMA", "key", _TODAY)
     assert "state" not in upserts[0]
+
+
+# ── Finnhub pacing / failures ──────────────────────────────────────────────────
+
+
+class _Resp:
+    def __init__(self, status: int, body: object) -> None:
+        self.status_code = status
+        self._body = body
+
+    def json(self) -> object:
+        return self._body
+
+
+def test_fetch_earnings_failure_is_none_not_empty(monkeypatch):
+    monkeypatch.setattr(finnhub_client.requests, "get", lambda *a, **kw: _Resp(500, {}))
+    assert calendar_sync._fetch_finnhub_earnings("ADMA", "k") is None
+
+
+def test_fetch_earnings_429_retried_once_with_throttle(monkeypatch):
+    responses = iter([_Resp(429, {}), _Resp(200, {"earningsCalendar": [{"date": "2026-11-11"}]})])
+    monkeypatch.setattr(finnhub_client.requests, "get", lambda *a, **kw: next(responses))
+    monkeypatch.setattr(finnhub_client.time, "sleep", lambda s: None)
+    assert calendar_sync._fetch_finnhub_earnings("ADMA", "k", finnhub_client.FinnhubThrottle(0)) == [{"date": "2026-11-11"}]
+
+
+def test_sync_ticker_skips_on_failed_fetch(monkeypatch):
+    monkeypatch.setattr(calendar_sync, "_fetch_finnhub_earnings", lambda t, k, th=None: None)
+    monkeypatch.setattr(calendar_sync, "upsert_catalyst", lambda row: pytest.fail("must not upsert"))
+    monkeypatch.setattr(calendar_sync, "cancel_superseded_catalysts", lambda *a: pytest.fail("must not cancel"))
+    assert calendar_sync._sync_ticker_earnings("ADMA", "k", _TODAY) is None
+
+
+def test_run_counts_fetch_failures(monkeypatch, run_env):
+    monkeypatch.setenv("FINNHUB_API_KEY", "k")
+    monkeypatch.setattr(calendar_sync, "get_watchlist_tickers", lambda: ["AAA", "BBB"])
+    monkeypatch.setattr(calendar_sync, "get_all_upcoming_catalysts", lambda days_ahead: [])
+    monkeypatch.setattr(calendar_sync, "_sync_ticker_earnings", lambda t, k, d, th: None if t == "AAA" else (2, 1))
+    result = run(as_of_date=_TODAY)
+    assert (result["finnhub_fetch_failures"], result["catalysts_upserted"], result["catalysts_cancelled"]) == (1, 2, 1)

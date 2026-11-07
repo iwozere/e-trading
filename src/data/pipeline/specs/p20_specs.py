@@ -98,7 +98,8 @@ SPECS: List[PluginSpec] = [
         # 20:50, not 20:45: shares the Finnhub 60/min quota with Revisions Ingest (20:30, ~8 min).
         cron="50 20 * * 1-5",
         script_path=f"{_SCRIPT_BASE}/run_catalyst_sync.py",
-        timeout_seconds=600,
+        # ~375 tickers x 1.1 s Finnhub pacing ~= 7 min, plus occasional 30 s 429 back-offs.
+        timeout_seconds=900,
         extra_task_params={
             "notification_rules": {"conditions": [
                 _telegram_rule("Telegram alert when T-10 or T-3 catalyst countdown triggers", "alerts_fired"),

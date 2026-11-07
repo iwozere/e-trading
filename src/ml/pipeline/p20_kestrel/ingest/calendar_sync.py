@@ -17,6 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+from src.ml.pipeline.p20_kestrel.ingest.finnhub_client import FinnhubThrottle, finnhub_get
 
 _kestrel = _KestrelService()
 finish_job_run = _kestrel.finish_job_run
@@ -37,35 +38,35 @@ _JOB_NAME = "catalyst_sync"
 _FINNHUB_HORIZON_DAYS = 90
 
 
-def _fetch_finnhub_earnings(ticker: str, api_key: str) -> List[Dict[str, Any]]:
+def _fetch_finnhub_earnings(ticker: str, api_key: str, throttle: FinnhubThrottle | None = None) -> List[Dict[str, Any]] | None:
     """
     Fetch earnings calendar from Finnhub for the given ticker.
 
     Args:
         ticker: Ticker symbol.
         api_key: Finnhub API key.
+        throttle: Pacer keeping calls under Finnhub's 60/min free-tier limit (a 429 is retried once).
 
     Returns:
-        List of earnings event dicts from Finnhub.
+        List of earnings event dicts from Finnhub (empty if none scheduled), or None if the fetch failed.
     """
-    import requests
-
     try:
         today = date.today()
-        url = "https://finnhub.io/api/v1/calendar/earnings"
         params = {
             "symbol": ticker,
             "from": today.isoformat(),
             "to": (today + timedelta(days=_FINNHUB_HORIZON_DAYS)).isoformat(),
             "token": api_key,
         }
-        resp = requests.get(url, params=params, timeout=10)
-        resp.raise_for_status()
+        resp = finnhub_get("https://finnhub.io/api/v1/calendar/earnings", params, throttle, ticker, timeout=10)
+        if resp.status_code != 200:
+            _logger.debug("Finnhub earnings non-200 for %s: %s", ticker, resp.status_code)
+            return None
         data = resp.json()
-        return data.get("earningsCalendar", [])
+        return data.get("earningsCalendar", []) if isinstance(data, dict) else None
     except Exception:
-        _logger.debug("Finnhub earnings fetch failed for %s", ticker)
-        return []
+        _logger.debug("Finnhub earnings fetch failed for %s", ticker, exc_info=True)
+        return None
 
 
 # Shown as a legend at the bottom of the combined countdown digest so the
@@ -156,7 +157,9 @@ def _check_idempotent_countdown(catalyst: Dict[str, Any], today: date, alerts: L
         stamp_catalyst_alert(catalyst["id"], "t3_alerted_at")
 
 
-def _sync_ticker_earnings(ticker: str, api_key: str, target_date: date) -> Tuple[int, int]:
+def _sync_ticker_earnings(
+    ticker: str, api_key: str, target_date: date, throttle: FinnhubThrottle | None = None
+) -> Tuple[int, int] | None:
     """
     Upsert one ticker's Finnhub earnings dates and cancel rows for dates Finnhub no longer reports.
 
@@ -167,13 +170,17 @@ def _sync_ticker_earnings(ticker: str, api_key: str, target_date: date) -> Tuple
         ticker: Ticker symbol.
         api_key: Finnhub API key.
         target_date: Run date; rows on or after it are (re)opened as 'upcoming'.
+        throttle: Finnhub pacer.
 
     Returns:
-        (rows upserted, rows cancelled).
+        (rows upserted, rows cancelled), or None if the Finnhub fetch failed.
     """
     window_start = date.today()
+    earnings = _fetch_finnhub_earnings(ticker, api_key, throttle)
+    if earnings is None:
+        return None
     dates: List[date] = []
-    for e in _fetch_finnhub_earnings(ticker, api_key):
+    for e in earnings:
         try:
             event_date = date.fromisoformat(e.get("date") or "")
         except ValueError:
@@ -226,12 +233,19 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
         tickers = get_watchlist_tickers()
         catalysts_upserted = 0
         catalysts_cancelled = 0
+        fetch_failures = 0
+        throttle = FinnhubThrottle()
 
         for ticker in tickers:
             if finnhub_key:
-                upserted, cancelled = _sync_ticker_earnings(ticker, finnhub_key, target_date)
-                catalysts_upserted += upserted
-                catalysts_cancelled += cancelled
+                synced = _sync_ticker_earnings(ticker, finnhub_key, target_date, throttle)
+                if synced is None:
+                    fetch_failures += 1
+                    continue
+                catalysts_upserted += synced[0]
+                catalysts_cancelled += synced[1]
+        if fetch_failures:
+            _logger.warning("Finnhub earnings fetch failed for %d/%d tickers", fetch_failures, len(tickers))
         if catalysts_cancelled:
             _logger.info("Cancelled %d earnings rows whose date Finnhub moved", catalysts_cancelled)
 
@@ -248,6 +262,7 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
             "catalysts_upserted": catalysts_upserted,
             "catalysts_passed": passed,
             "catalysts_cancelled": catalysts_cancelled,
+            "finnhub_fetch_failures": fetch_failures,
             "countdown_checks": len(alerts_fired),
         }
         finish_job_run(_JOB_NAME, target_date, status="ok", rows_out=catalysts_upserted)

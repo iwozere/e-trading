@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import os
 import sys
-import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Set
@@ -38,6 +37,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 import requests
 
 from src.data.db.services.kestrel_service import KestrelService as _KestrelService
+from src.ml.pipeline.p20_kestrel.ingest.finnhub_client import FinnhubThrottle, finnhub_get
 from src.ml.pipeline.p20_kestrel.config import (
     REVISIONS_EPS_DELTA_FULL_CREDIT_PCT,
     REVISIONS_EPS_DELTA_MAX_PTS,
@@ -75,27 +75,9 @@ _SIGNAL_FINNHUB_MOMENTUM = "finnhub_rec_momentum"
 _SIGNAL_REVISIONS_SCORE = "revisions_score"
 
 _UPSERT_CHUNK_TICKERS = 50  # flush signals every N tickers so a timeout keeps the work already done
-# Finnhub free tier allows 60 calls/min. Before the FMP gate the slow FMP calls paced the loop
-# (~40 Finnhub calls/min); without them the loop hit Finnhub's limit and 2026-11-05 kept 77/375 tickers.
-_FINNHUB_MIN_INTERVAL_S = 1.1
-_FINNHUB_429_BACKOFF_S = 30.0
+# Finnhub pacing lives in finnhub_client: without it the loop hit the 60/min limit (2026-11-05 kept 77/375).
 _FMP_CALLS_PER_TICKER = 2  # analyst-estimates + grades
 _ROTATION_EPOCH = date(2000, 1, 3)  # a Monday; anchors the weekday counter for the FMP rotation
-
-
-class _Throttle:
-    """Enforce a minimum interval between successive calls (single-threaded)."""
-
-    def __init__(self, min_interval_s: float) -> None:
-        self.min_interval_s = min_interval_s
-        self._last = float("-inf")
-
-    def wait(self) -> None:
-        """Sleep until at least ``min_interval_s`` has passed since the previous call."""
-        remaining = self._last + self.min_interval_s - time.monotonic()
-        if remaining > 0:
-            time.sleep(remaining)
-        self._last = time.monotonic()
 
 
 class _FmpGate:
@@ -279,18 +261,7 @@ def _net_bullish_score(row: Dict[str, Any]) -> float | None:
     ) / total
 
 
-def _finnhub_get(ticker: str, api_key: str, throttle: _Throttle | None) -> requests.Response:
-    """Issue one paced Finnhub recommendation-trend request."""
-    if throttle is not None:
-        throttle.wait()
-    return requests.get(
-        _FINNHUB_RECOMMENDATION_URL,
-        params={"symbol": ticker, "token": api_key},
-        timeout=15,
-    )
-
-
-def _fetch_finnhub_momentum(ticker: str, api_key: str, throttle: _Throttle | None = None) -> float | None:
+def _fetch_finnhub_momentum(ticker: str, api_key: str, throttle: FinnhubThrottle | None = None) -> float | None:
     """
     Compute analyst-recommendation momentum from Finnhub's recommendation trend.
 
@@ -301,17 +272,13 @@ def _fetch_finnhub_momentum(ticker: str, api_key: str, throttle: _Throttle | Non
         ticker: Ticker symbol.
         api_key: Finnhub API key.
         throttle: Optional pacer keeping calls under Finnhub's per-minute limit;
-            a 429 is retried once after ``_FINNHUB_429_BACKOFF_S``.
+            a 429 is retried once after a back-off.
 
     Returns:
         Momentum, roughly in [-4, 4], or None on failure / insufficient history.
     """
     try:
-        resp = _finnhub_get(ticker, api_key, throttle)
-        if resp.status_code == 429 and throttle is not None:
-            _logger.warning("Finnhub 429 for %s; backing off %.0fs and retrying once", ticker, _FINNHUB_429_BACKOFF_S)
-            time.sleep(_FINNHUB_429_BACKOFF_S)
-            resp = _finnhub_get(ticker, api_key, throttle)
+        resp = finnhub_get(_FINNHUB_RECOMMENDATION_URL, {"symbol": ticker, "token": api_key}, throttle, ticker)
         if resp.status_code != 200:
             _logger.debug("Finnhub recommendation non-200 for %s: %s", ticker, resp.status_code)
             return None
@@ -375,7 +342,7 @@ def _compute_ticker_signals(
     finnhub_api_key: str,
     today: date,
     gate: _FmpGate | None = None,
-    finnhub_throttle: _Throttle | None = None,
+    finnhub_throttle: FinnhubThrottle | None = None,
     fetch_fmp: bool = True,
 ) -> Dict[str, float]:
     """
@@ -467,7 +434,7 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
         _logger.info("Revisions ingest: %d tickers (watchlist ∪ positions)", len(tickers))
 
         gate = _FmpGate()
-        finnhub_throttle = _Throttle(_FINNHUB_MIN_INTERVAL_S)
+        finnhub_throttle = FinnhubThrottle()
         fmp_tickers = _fmp_slice(tickers, target_date, REVISIONS_FMP_DAILY_CALL_BUDGET)
         _logger.info(
             "Revisions ingest: FMP for %d/%d tickers today (budget %d calls)", len(fmp_tickers), len(tickers), REVISIONS_FMP_DAILY_CALL_BUDGET
