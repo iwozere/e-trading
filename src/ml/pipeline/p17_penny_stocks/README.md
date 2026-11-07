@@ -18,8 +18,10 @@ in shadow mode: it is reported and tracked by the signal ledger but not emailed,
 - Short-squeeze enrichment (Yahoo SI % float + optional FINRA daily short-volume ratio).
 - Dilution detection (S-3 shelf, 424B ATM, reverse split, convertible, warrants) from EDGAR submissions.
 - Catalyst detection from the shared daily 8-K index (FDA, M&A, material agreements, contracts, guidance).
+- Filing annotations from the P15 EDGAR cache: insider Form 4 buys/sells/clusters, fresh 13D/13G (no score weight).
+- Next scheduled catalyst per ticker from Kestrel (`k20_catalysts`), live runs only.
 - Weighted composite score, tiers, EXPLOSIVE flag, extension gate, shadow setup flag.
-- CSV / JSON / Markdown reports per day; Tier A/B email via the notification service.
+- CSV / JSON / Markdown reports per day; Tier A/B email (+ "Watch — fresh 13G" section) via the notification service.
 - Research tools: best-case backtest, stop/trailing strategy simulator + Optuna, point-in-time replay.
 
 ## Quick Start
@@ -57,11 +59,13 @@ This module integrates with:
 - `src.data.db.services` - notification queue and user channel lookup for the Tier A/B email
 - `src.data.pipeline.specs.p17_specs` - scheduler job definition (cron `0 8 * * 1-5`)
 - `src.ml.pipeline.p19_penny_intraday` - reads the latest candidates CSV (Tier A/B/C + explosive) as its watchlist
-- `src.ml.pipeline.signal_ledger` - harvests the candidates CSV (`p17_candidates`, `p17_tier_ab`, `p17_setup` streams)
+- `src.ml.pipeline.signal_ledger` - harvests the candidates CSV (`p17_candidates`, `p17_tier_ab`, `p17_setup`, `p17_fresh_13g` streams)
+- `src.ml.pipeline.p15_hidden_deps` EDGAR daily job - writes the Form 4 / 13D/G cache read by stage 5.6
+- `src.ml.pipeline.p20_kestrel` - upcoming catalysts for the "Next event" column
 
 ## Configuration
 All thresholds live in `config.py` dataclasses (`P17FilterConfig`, `P17TechnicalConfig`, `P17ShortSqueezeConfig`,
-`P17ScoringConfig`, `P17CatalystConfig`, `P17AlertConfig`). The scheduler injects `--user-id` for the email.
+`P17ScoringConfig`, `P17CatalystConfig`, `P17AlertConfig`, `P17FilingsConfig`). The scheduler injects `--user-id` for the email.
 FINRA credentials are optional (the short-squeeze agent degrades to Yahoo-only). `DATA_CACHE_DIR` controls the shared
 OHLCV / fundamentals / EDGAR caches.
 

@@ -136,17 +136,65 @@ could see later bars.
 311 tests pass (P17, P19, signal ledger); pyright and mypy clean. Smoke run on 10 tickers for 2026-11-06: one batch
 download, all fresh; the cached ANGI / CRCT / PSIG bars were overwritten with the final Yahoo values.
 
-### 5.4 Not yet verified
-The prod cache lives under the Pi's `DATA_CACHE_DIR` (not the `R:\apps\e-trading\data\cache` copy, which holds 18
-symbols), so the share of partial bars on prod is unmeasured. Expect the first post-deploy runs to log a full batch
-download of ~140 tickers and no cache hits.
+### 5.4 Prod cache measurement (2026-11-07)
+The prod cache is `R:\data-cache` (Pi `DATA_CACHE_DIR`). For the 139 tickers of the 2026-11-05 universe, last 60
+sessions vs final Yahoo volume: **5 of 8,263 bars (0.1%) were partial**, on 4 tickers (BRAI ×2, BYND, QTEX, SDEV).
+So on prod the partial-bar defect is rare (prod jobs mostly fetch after the close); the material prod defect was
+staleness (§2.3 item 5). The local example in §5.1 came from a dev run during market hours. Always re-downloading
+still fixes both and costs one batch call. Post-deploy check scheduled for the 2026-11-09 run.
 
-## 6. Monitoring after deploy
+## 6. Phase 3 — filings and calendar annotations (implemented 2026-11-07)
+
+### 6.1 Event study: Form 4 and 13D/G before the jump
+P15 already caches EDGAR Form 4 (EFTS) and 13D/G (quarterly `form.idx`) daily. Episode-level study over the P17
+universe (Apr–Nov 2026, 14-day cooldown, entry next open, baseline = all P17 rows: fwd10 mean −2.0%, win 37%,
+P(+20%) 19%):
+
+| Event in last 5 days | n | fwd10 mean | fwd10 median | win | P(+20%) |
+|---|---|---|---|---|---|
+| Fresh SC 13G (passive > 5%) | 107 | **+6.8%** | +1.8% | 54% | 34% |
+| Insider cluster buy (≥ 2 insiders) | 15 | positive | — | — | — |
+| Any insider open-market buy | — | ≈ baseline | | | |
+| SC 13D, insider sells | — | ≈ baseline / negative | | | |
+
+- 13G: bootstrap p = 0.004, but halves differ (H1 +11.6%, H2 +0.9%) → **annotation + watch list, no score weight**.
+- Cluster buys: n = 15 and driven by one name (MNTS) → annotation only.
+
+### 6.2 Kestrel catalysts (k20_catalysts)
+863 rows, 32 of 358 P17 tickers covered. The table is a current snapshot (no point-in-time history; every row
+`state = 'upcoming'`, past events never move to `passed`; duplicate earnings rows e.g. VNDA), so it cannot be
+backtested. Used as a display column only ("Next event: pdufa in 12d (confirmed)"), and only for runs whose target
+date is ≤ 4 days old so a back-dated run never sees future knowledge.
+
+### 6.3 Change
+- `agents/filings_agent.py` (stage 5.6): reads the P15 cache only (`allow_network=False`) for the 5 calendar days
+  ending on `target_date`; sets `insider_buy_count/value/buyers`, `insider_sell_count/value`, `fresh_13g`,
+  `fresh_13d`, `fresh_13dg_amend` (subject company matched by CIK; `SC 13G` and `SCHEDULE 13G` spellings).
+- `agents/kestrel_calendar_agent.py` (stage 5.7): nearest upcoming event per ticker → `next_catalyst_type/date/days/
+  confidence`; DB failures are logged and swallowed.
+- Signals list gets `fresh_13g`, `insider_buy_{n}x_{k}k`, `insider_cluster`, `next_{type}_{d}d_{conf}`; scores unchanged.
+- Email: "Next event" column for A/B picks plus a **"Watch — fresh 13G filings"** section (non-A/B names, top 10 by
+  score, explicitly not a buy signal). An email is sent when there are picks *or* watch names.
+- Signal ledger: `fresh_13g` in meta → new `p17_fresh_13g` scorecard stream (live out-of-sample check of §6.1).
+- Config: `P17FilingsConfig` (`lookback_days=5`, `cluster_min_insiders=2`, `kestrel_days_ahead=30`,
+  `kestrel_max_target_age_days=4`, `watch_max_names=10`).
+
+### 6.4 13D/G cache bug found on the way (fixed in `edgar_downloader.py`)
+Prod cache coverage was 59.5% (13 of 26 Q4 weekdays empty). The daily job ran right after EDGAR's quarterly index
+was refreshed at most every 24 h, so the day being fetched was not in the index yet and an **empty file was cached
+forever**. Fix: `_form_idx_lines_covering()` force-refreshes the index when it doesn't reach the target day, and an
+uncovered day is not cached (retried next run). Same fix for Form 10. Empty days need a one-off forced backfill;
+Form 4 has a separate gap (2026-06-12..06-26, 09-21, 09-22, 09-29) needing a backfill only.
+
+## 7. Monitoring after deploy
 - `pipeline.log` `Result:` line shows `extended=… setups=…`; expect fewer Tier A/B emails.
 - Signal-ledger scorecard: `p17_tier_ab` (gated from 2026-11-07) and `p17_setup` once ≥ 20 cohorts mature.
 - Re-run `replay.py` after ~2 months of new runs and compare against the table above.
+- `p17_fresh_13g` stream: promote 13G to a score weight only if it holds out of sample (≥ 20 cohorts).
+- `pipeline.log` `Filings:` line: non-zero 13D/G rows every weekday once the cache fix is deployed.
 
-## 7. Artefacts
+## 8. Artefacts
 - Code: `agents/scoring_agent.py`, `agents/technical_agent.py`, `config.py`, `models/candidate.py`,
-  `agents/reporting_agent.py`, `p17_pipeline.py`, `run_p17.py`, `replay.py`; ledger `harvesters.py`, `scorecard.py`.
+  `agents/reporting_agent.py`, `p17_pipeline.py`, `run_p17.py`, `replay.py`, `agents/filings_agent.py`, `agents/kestrel_calendar_agent.py`, `agents/notification_agent.py`;
+  ledger `harvesters.py`, `scorecard.py`; `src/data/downloader/edgar_downloader.py` (13D/G index coverage).
 - Spec: `docs/pipeline-specification.md` §11.1–11.2. Tasks: `docs/Tasks.md`.

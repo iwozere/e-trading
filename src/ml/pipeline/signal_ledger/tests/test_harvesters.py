@@ -111,3 +111,9 @@ def test_harvest_p24_reads_both_timeframes_and_skips_suspect(tmp_path: Path) -> 
     weekly = [r for r in records if r.source == "p24_weekly"]
     assert [r.ticker for r in weekly] == ["WK"] and weekly[0].horizon_days == 130
     assert all(r.pipeline == "p24" and r.side == "long" and r.signal_date == date(2026, 11, 6) for r in records)
+
+
+def test_p17_fresh_13g_flag_kept_in_meta(tmp_path: Path) -> None:
+    _write(tmp_path / "p17_penny_stocks/2026-11-09/2026-11-09_candidates.csv",
+           "ticker,final_score,tier,fresh_13g\nAAA,50,C,True\nBBB,80,A,False\n")
+    assert {r.ticker: r.meta for r in harvest_p17(tmp_path, None)} == {"AAA": {"tier": "C", "fresh_13g": True}, "BBB": {"tier": "A"}}

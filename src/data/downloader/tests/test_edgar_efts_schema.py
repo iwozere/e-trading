@@ -103,6 +103,56 @@ def test_download_13dg_parses_the_real_schedule_prefix_form_type(tmp_path):
     assert df.iloc[0]["accession_number"] == "0001753926-24-001299"
 
 
+_OLD_IDX = [
+    "SCHEDULE 13G     Old Fund LP                                                   "
+    "1111111     2026-10-05  edgar/data/1111111/0001111111-26-000001.txt",
+]
+_NEW_IDX = _OLD_IDX + [
+    "SCHEDULE 13G     New Fund LP                                                   "
+    "2222222     2026-10-06  edgar/data/2222222/0002222222-26-000002.txt",
+]
+
+
+def test_download_13dg_refreshes_index_that_does_not_cover_the_day(tmp_path):
+    """Regression (2026-11-07): a <24 h-old index lacking the target day cached an empty day forever."""
+    dl = EdgarDownloader(cache_dir=tmp_path)
+    calls = []
+
+    def fake_idx(year, quarter, force=False):
+        calls.append(force)
+        return _NEW_IDX if force else _OLD_IDX
+
+    with patch.object(dl, "_fetch_quarterly_form_idx", side_effect=fake_idx):
+        df = dl.download_13dg_filings(as_of_date=date(2026, 10, 6))
+    assert calls == [False, True]
+    assert list(df["cik"]) == ["2222222"]
+    assert (dl._13dg_dir / "2026-10-06.csv.gz").exists()
+
+
+def test_download_13dg_does_not_cache_a_day_edgar_has_not_published(tmp_path):
+    dl = EdgarDownloader(cache_dir=tmp_path)
+    with patch.object(dl, "_fetch_quarterly_form_idx", return_value=_OLD_IDX):
+        df = dl.download_13dg_filings(as_of_date=date(2026, 10, 6))
+    assert df.empty
+    assert not (dl._13dg_dir / "2026-10-06.csv.gz").exists()  # stays a cache miss → retried next run
+
+
+def test_download_13dg_caches_empty_holiday_once_a_later_day_is_indexed(tmp_path):
+    dl = EdgarDownloader(cache_dir=tmp_path)
+    with patch.object(dl, "_fetch_quarterly_form_idx", return_value=_NEW_IDX):
+        df = dl.download_13dg_filings(as_of_date=date(2026, 10, 3))  # Saturday: no filings, later day indexed
+    assert df.empty
+    assert (dl._13dg_dir / "2026-10-03.csv.gz").exists()
+
+
+def test_download_form10_does_not_cache_uncovered_day(tmp_path):
+    dl = EdgarDownloader(cache_dir=tmp_path)
+    with patch.object(dl, "_fetch_quarterly_form_idx", return_value=_OLD_IDX):
+        df = dl.download_form10_filings(as_of_date=date(2026, 10, 6))
+    assert df.empty
+    assert not (dl._form10_dir / "2026-10-06.csv.gz").exists()
+
+
 # ── Form 10 / 10-12B (spin-off registration) ────────────────────────────────
 
 

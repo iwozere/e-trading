@@ -74,3 +74,9 @@ def test_unmatured_rows_are_ignored() -> None:
     rows = [{"source": "p10_final_passed", "signal_date": date(2026, 1, 1), "side": "long", "meta": None}]
     card = build_scorecard(rows)
     assert card[0]["horizons"] == []
+
+
+def test_sub_stream_fresh_13g_is_carved_out_of_p17() -> None:
+    rows = [_row("p17_candidates", d, 0.0, meta={"tier": "C", "fresh_13g": d < 4}) for d in range(10)]
+    streams = {s["stream"]: s["signals"] for s in build_scorecard(rows)}
+    assert streams == {"p17_candidates": 10, "p17_fresh_13g": 4}

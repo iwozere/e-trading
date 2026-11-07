@@ -15,7 +15,9 @@ the run instead of aborting it:
 UniverseAgent ─► MarketAgent ─► TechnicalAgent ─► ShortSqueezeAgent ─► DilutionAgent ─► CatalystAgent
    (stage 1)       (stage 2)       (stage 3)          (stage 4)           (stage 5)       (stage 5.5)
                                                                                               │
-         NotificationAgent ◄── ReportingAgent ◄── ScoringAgent ◄──────────────────────────────┘
+                                    KestrelCalendarAgent (5.7) ◄── FilingsAgent (5.6) ◄────────┘
+                                                │
+         NotificationAgent ◄── ReportingAgent ◄── ScoringAgent ◄──┘
             (stage 8)            (stage 7)          (stage 6)
 ```
 
@@ -27,10 +29,15 @@ UniverseAgent ─► MarketAgent ─► TechnicalAgent ─► ShortSqueezeAgent 
 - **ShortSqueezeAgent** - SI % float, days to cover, optional FINRA short-volume ratio; `compute_score()`.
 - **DilutionAgent** - EDGAR filing history → summed hard penalty.
 - **CatalystAgent** - 8-K items + description keywords → recency-weighted `catalyst_score`.
+- **FilingsAgent** - Form 4 (open-market buys/sells, insider clusters) and fresh 13D/G per ticker from the P15
+  EDGAR cache over the last 5 calendar days; never hits the network.
+- **KestrelCalendarAgent** - nearest upcoming Kestrel catalyst (`k20_catalysts`) per ticker; skipped for
+  back-dated runs; DB failures swallowed.
 - **ScoringAgent** - sub-scores normalised to 0–100, weighted sum, dilution deduction, tier, EXPLOSIVE flag,
   extension gate, setup score.
 - **ReportingAgent** - CSV / JSON / Markdown artefacts.
-- **NotificationAgent** - queues one Tier A/B email via `NotificationService`; never raises.
+- **NotificationAgent** - queues one email (Tier A/B picks with a "Next event" column + a "Watch — fresh 13G"
+  section) via `NotificationService`; never raises.
 - **Research tools** - `backtest.py` (sell-at-peak upper bound), `strategy_sim.py` (stop/trail simulator + Optuna),
   `replay.py` (point-in-time re-scoring + forward returns).
 
@@ -53,6 +60,9 @@ UniverseAgent ─► MarketAgent ─► TechnicalAgent ─► ShortSqueezeAgent 
   emailed. Thresholds were deliberately not tuned on the replay sample.
 - **Replay compares like with like** - `replay_legacy` (gate off) vs `replay_ab` (gate on) use the same fresh OHLCV;
   `prod_ab` differs because prod scored some rows on stale cached bars.
+- **Filings and calendar are annotations, not weights (2026-11-07)** - fresh 13G showed fwd10 +6.8% vs −2.0%
+  baseline (n 107, p 0.004) but decayed between halves; Kestrel has no point-in-time history. Both are shown and
+  measured (`p17_fresh_13g` ledger stream) before any score weight is considered.
 - **Caches shared across pipelines** - OHLCV and fundamentals caches are reused by P19 and others.
 
 ## Integration Patterns

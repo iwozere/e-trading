@@ -385,3 +385,19 @@ def test_setup_requires_ohlcv_features():
 def test_setup_weights_must_sum_to_one():
     with pytest.raises(ValueError):
         P17ScoringConfig(setup_weight_coil=0.5)
+
+
+# ── Filing / calendar annotation signals ───────────────────────────────────────
+
+
+def test_filing_signals_are_annotations_only():
+    agent = _make_agent()
+    plain = _make_candidate()
+    annotated = _make_candidate(
+        fresh_13g=True, insider_buy_count=3, insider_buyers=2, insider_buy_value=120_000.0,
+        next_catalyst_type="earnings", next_catalyst_days=4, next_catalyst_confidence="confirmed",
+    )
+    agent._score(plain)
+    agent._score(annotated)
+    assert annotated.final_score == plain.final_score  # no score weight
+    assert {"fresh_13g", "insider_buy_2x_120k", "insider_cluster", "next_earnings_4d_confirmed"} <= set(annotated.signals)

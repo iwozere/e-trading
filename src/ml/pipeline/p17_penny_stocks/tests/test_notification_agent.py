@@ -8,7 +8,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p17_penny_stocks.agents.notification_agent import NotificationAgent
-from src.ml.pipeline.p17_penny_stocks.config import P17AlertConfig
+from src.ml.pipeline.p17_penny_stocks.config import P17AlertConfig, P17FilingsConfig
 from src.ml.pipeline.p17_penny_stocks.models.candidate import Candidate
 
 DATE = "2026-06-26"
@@ -107,3 +107,44 @@ def test_format_html_escapes_external_data():
     html = NotificationAgent.format_html(picks, DATE)
     assert "<script>" not in html
     assert "&lt;script&gt;" in html
+
+
+# ── Fresh-13G watch section ─────────────────────────────────────────────────
+
+
+def test_watch_only_email_is_queued(monkeypatch):
+    created = _inject_services(monkeypatch)
+    agent = _agent()
+    res = agent.run([_cand("WWW", "C", 40, fresh_13g=True, company_name="Watch Co"), _cand("ZZZ", "W", 5)])
+    assert res == {"emailed": 0, "watch": 1}
+    content = created["payload"]["content"]
+    assert "watch: 1 fresh 13G" in content["title"]
+    assert "Watch — fresh 13G filings" in content["html"] and "WWW" in content["html"]
+    assert "NOT a buy signal" in content["message"]
+
+
+def test_watch_excludes_tier_ab_and_respects_cap():
+    agent = NotificationAgent(P17AlertConfig(), DATE, "1", filings_config=P17FilingsConfig(watch_max_names=2))
+    cands = [
+        _cand("AAA", "B", 70, fresh_13g=True),
+        _cand("C1", "C", 50, fresh_13g=True),
+        _cand("C2", "C", 45, fresh_13g=True),
+        _cand("C3", "W", 20, fresh_13g=True),
+    ]
+    assert [c.ticker for c in agent.watch_list(cands)] == ["C1", "C2"]
+
+
+def test_watch_disabled():
+    agent = NotificationAgent(P17AlertConfig(), DATE, "1", filings_config=P17FilingsConfig(watch_13g_enabled=False))
+    assert agent.watch_list([_cand("C1", "C", 50, fresh_13g=True)]) == []
+
+
+def test_next_event_and_filings_rendered():
+    pick = _cand(
+        "AAA", "B", 60, next_catalyst_type="pdufa", next_catalyst_days=12, next_catalyst_confidence="confirmed",
+        insider_buy_count=2, insider_buyers=2, insider_buy_value=85_000.0,
+    )
+    text = NotificationAgent.format_text([pick], DATE)
+    assert "pdufa in 12d (confirmed)" in text
+    assert "2 insiders bought $85k" in text
+    assert "pdufa in 12d (confirmed)" in NotificationAgent.format_html([pick], DATE)

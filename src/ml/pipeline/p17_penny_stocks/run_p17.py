@@ -89,6 +89,7 @@ def main() -> int:
             "explosive_count": result.get("explosive", 0),
             "extended_count": result.get("extended", 0),
             "setup_count": result.get("setup", 0),
+            "fresh_13g_count": result.get("fresh_13g", 0),
             "results_dir": str(results_dir),
             "timestamp": datetime.now(UTC).isoformat(),
         }

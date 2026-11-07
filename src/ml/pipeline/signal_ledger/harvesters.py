@@ -180,6 +180,8 @@ def harvest_p17(results_root: Path, since: Optional[date]) -> List[SignalRecord]
             meta: Dict[str, Any] = {"tier": tier} if isinstance(tier, str) else {}
             if _truthy(row.get("setup_candidate")):
                 meta["setup"] = True
+            if _truthy(row.get("fresh_13g")):
+                meta["fresh_13g"] = True
             records.append(SignalRecord(
                 pipeline="p17", source="p17_candidates", signal_date=day, ticker=ticker, rank=position,
                 score=_optional_float(row.get("final_score")),

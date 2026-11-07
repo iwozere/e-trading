@@ -2,7 +2,7 @@
 P17 Penny Stock Screener — Pipeline Configuration
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from src.ml.pipeline.shared.config import FundamentalFilterConfig, UniverseConfig
 
@@ -182,6 +182,27 @@ class P17CatalystConfig:
 
 
 @dataclass
+class P17FilingsConfig:
+    """Insider (Form 4), ownership (13D/G) and scheduled-catalyst (P20 Kestrel) annotation."""
+
+    # Filings counted when filed in (target_date − lookback_days, target_date], calendar days.
+    # Event study 2026-11-07 (CR-2026-11-06 §8): an initial 13G filed in the last 5 days
+    # → fwd10 mean +6.8% vs −2.0% baseline (107 episodes); 30-day windows had no edge.
+    lookback_days: int = 5
+    cluster_min_insiders: int = 2  # "insider_cluster" signal
+
+    # Scheduled catalysts from k20_catalysts: events within this many days of the run day.
+    kestrel_enabled: bool = True
+    kestrel_days_ahead: int = 30
+    # Kestrel's table is a current snapshot — skip it for back-dated runs older than this.
+    kestrel_max_target_age_days: int = 4
+
+    # Email "watch" section for fresh-13G names that are not Tier A/B.
+    watch_13g_enabled: bool = True
+    watch_max_names: int = 10
+
+
+@dataclass
 class P17AlertConfig:
     """Alert and notification settings."""
 
@@ -202,6 +223,7 @@ class P17PipelineConfig:
     scoring_config: P17ScoringConfig
     catalyst_config: P17CatalystConfig
     alert_config: P17AlertConfig
+    filings_config: P17FilingsConfig = field(default_factory=P17FilingsConfig)
 
     save_intermediate_results: bool = True
     verbose_logging: bool = True

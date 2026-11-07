@@ -33,7 +33,7 @@ import time
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Tuple, Union
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -939,8 +939,7 @@ class EdgarDownloader(BaseDataDownloader):
 
         # EDGAR EFTS does not index SC 13D/G filings — use the quarterly form.idx instead.
         _logger.info("Fetching 13D/G filings for %s from EDGAR quarterly form index ...", date_str)
-        quarter = (target_date.month - 1) // 3 + 1
-        idx_lines = self._fetch_quarterly_form_idx(target_date.year, quarter, force=force)
+        idx_lines, covered = self._form_idx_lines_covering(target_date, force=force)
 
         records = []
         for line in idx_lines:
@@ -970,6 +969,13 @@ class EdgarDownloader(BaseDataDownloader):
 
         _13DG_COLS = ["cik", "entity_name", "accession_number", "filed_date", "form_type"]
         df = pd.DataFrame(records, columns=_13DG_COLS) if records else pd.DataFrame(columns=_13DG_COLS)  # type: ignore[arg-type]
+        if not covered:
+            _logger.warning(
+                "13D/G: EDGAR form index does not cover %s yet — returning %d rows without caching (retry later)",
+                date_str,
+                len(df),
+            )
+            return df
         atomic_to_csv(df, dest, index=False, compression="gzip")
         _logger.info("Cached %d 13D/G filings for %s → %s", len(df), date_str, dest)
         return df
@@ -1012,8 +1018,7 @@ class EdgarDownloader(BaseDataDownloader):
             return pd.read_csv(dest, compression="gzip")
 
         _logger.info("Fetching Form 10 filings for %s from EDGAR quarterly form index ...", date_str)
-        quarter = (target_date.month - 1) // 3 + 1
-        idx_lines = self._fetch_quarterly_form_idx(target_date.year, quarter, force=force)
+        idx_lines, covered = self._form_idx_lines_covering(target_date, force=force)
 
         records = []
         for line in idx_lines:
@@ -1038,6 +1043,13 @@ class EdgarDownloader(BaseDataDownloader):
 
         _FORM10_COLS = ["cik", "entity_name", "accession_number", "filed_date", "form_type"]
         df = pd.DataFrame(records, columns=_FORM10_COLS) if records else pd.DataFrame(columns=_FORM10_COLS)  # type: ignore[arg-type]
+        if not covered:
+            _logger.warning(
+                "Form 10: EDGAR form index does not cover %s yet — returning %d rows without caching (retry later)",
+                date_str,
+                len(df),
+            )
+            return df
         atomic_to_csv(df, dest, index=False, compression="gzip")
         _logger.info("Cached %d Form 10 filings for %s → %s", len(df), date_str, dest)
         return df
@@ -1170,6 +1182,32 @@ class EdgarDownloader(BaseDataDownloader):
             _logger.warning("No company facts available for CIK %s", cik)
             return None
         return _pick_best_shares_fact(cf_json, settlement_date)
+
+    def _form_idx_lines_covering(self, target_date: date, force: bool = False) -> Tuple[List[str], bool]:
+        """
+        Quarterly form.idx lines for ``target_date``'s quarter, refreshed if they do not cover it yet.
+
+        The current-quarter index is only re-downloaded once it is 24 h old, and the daily
+        P15 job runs at almost the same time every day, so roughly every other run used
+        yesterday's copy — which lacks the target date — and cached an empty day that was
+        never retried (2026-10/11: 13 of 26 Q4 days of 13D/G empty on prod). Coverage is
+        "the index contains any filing dated on/after the target date".
+
+        Args:
+            target_date: Filing date the caller wants.
+            force: Force the first download as well.
+
+        Returns:
+            (lines, covered). When ``covered`` is False even after a forced refresh, EDGAR
+            has not published the day yet and the caller must not cache its result.
+        """
+        quarter = (target_date.month - 1) // 3 + 1
+        lines = self._fetch_quarterly_form_idx(target_date.year, quarter, force=force)
+        if _form_idx_covers(lines, target_date):
+            return lines, True
+        if not force:
+            lines = self._fetch_quarterly_form_idx(target_date.year, quarter, force=True)
+        return lines, _form_idx_covers(lines, target_date)
 
     def _fetch_quarterly_form_idx(self, year: int, quarter: int, force: bool = False) -> List[str]:
         """
@@ -1840,6 +1878,29 @@ def _pick_best_shares_fact(
     if best is None:
         return None
     return {"value": best[1], "effective_date": best[0], "fact": best[2], "unit": best[3]}
+
+
+_FORM_IDX_DATE_RE = re.compile(r"\s(\d{4}-\d{2}-\d{2})\s")
+
+
+def _form_idx_covers(lines: List[str], target_date: date) -> bool:
+    """
+    True when a quarterly form.idx already contains filings dated on or after ``target_date``.
+
+    Args:
+        lines: Data lines of a quarterly form.idx (header stripped).
+        target_date: Filing date to check.
+
+    Returns:
+        Whether the index is published through ``target_date`` (a weekday holiday with no
+        filings is covered as soon as a later day appears).
+    """
+    wanted = str(target_date)
+    for line in reversed(lines):  # recent filings sit at the end of each form-type block, so this usually exits early
+        match = _FORM_IDX_DATE_RE.search(line)
+        if match and match.group(1) >= wanted:
+            return True
+    return False
 
 
 def _13f_filing_window(year: int, quarter: int) -> tuple:

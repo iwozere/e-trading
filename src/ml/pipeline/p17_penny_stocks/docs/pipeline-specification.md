@@ -752,6 +752,21 @@ episodes were preceded by a setup flag, and setups jumped +20% within 10 days le
 often than the universe (14.6% vs 19.1%). Daily-bar coil features do not anticipate
 penny-stock jumps; thresholds were not tuned on this data.
 
+## 11.3 Filing and calendar annotations — no score weight (added 2026-11-07)
+
+Stage 5.6 `FilingsAgent` reads the P15 EDGAR cache (never the network) for the 5 calendar
+days ending on `target_date`: Form 4 open-market buys (code P, acquired) and sells (code S),
+non-derivative only, insider clusters (≥ 2 distinct buyers); fresh SC 13G / SC 13D / amendments
+matched to the subject company by CIK. Stage 5.7 `KestrelCalendarAgent` adds the nearest
+upcoming `k20_catalysts` event (type, date, days, confidence), only when `target_date` is
+≤ 4 days old.
+
+Signals list gains `fresh_13g`, `insider_buy_{n}x_{k}k`, `insider_cluster`,
+`next_{type}_{d}d_{conf}`; sub-scores and tiers are unchanged. The email gets a "Next event"
+column and a "Watch — fresh 13G filings" section (non-A/B names, top 10 by score). Rationale
+and event study: `docs/CR-2026-11-06-late-signals.md` §6. The signal ledger tracks
+`p17_fresh_13g` out of sample before any weight is considered.
+
 ---
 
 # 12. Output Report

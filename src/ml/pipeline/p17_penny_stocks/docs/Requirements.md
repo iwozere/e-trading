@@ -15,14 +15,17 @@ All pinned in the project root `requirements*.txt`; nothing P17-specific.
 - `src.ml.pipeline.shared.edgar_cik` - ticker → CIK map for dilution and catalyst lookups
 - `src.ml.pipeline.shared.trf_downloader` - FINRA daily short-volume (optional)
 - `src.data.downloader.yahoo_data_downloader` - fundamentals snapshot and batch OHLCV
-- `src.data.downloader.edgar_downloader` - EDGAR submissions and the daily 8-K index
+- `src.data.downloader.edgar_downloader` - EDGAR submissions, the daily 8-K index, and the Form 4 / 13D/G cache
+  (`DATA_CACHE_DIR/edgar/13f/{form4,13dg}`) written by the P15 daily job (P17 reads it, never downloads)
+- `src.ml.pipeline.p20_kestrel` (`KestrelService.get_all_upcoming_catalysts`) - `k20_catalysts` table (optional;
+  the stage degrades to no column when the DB is unavailable)
 - `src.data.downloader.fear_greed_downloader` - market sentiment line in the report (optional)
 - `src.data.cache.unified_cache` / `fundamentals_cache` - shared OHLCV and fundamentals caches
 - `src.data.db.services.notification_service` / `users_service` - email queue and recipient resolution
 - `src.notification.logger` - logging
 
 Consumers of P17 output (must stay compatible with the candidates CSV columns `ticker`, `tier`,
-`explosive_candidate`, `final_score`, `setup_candidate`, `avg_volume_30d`, `price`):
+`explosive_candidate`, `final_score`, `setup_candidate`, `fresh_13g`, `avg_volume_30d`, `price`):
 - `src.ml.pipeline.p19_penny_intraday.watchlist_builder`
 - `src.ml.pipeline.signal_ledger.harvesters.harvest_p17`
 

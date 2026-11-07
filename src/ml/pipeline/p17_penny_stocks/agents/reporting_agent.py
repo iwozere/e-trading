@@ -92,6 +92,7 @@ class ReportingAgent:
             "explosive": sum(1 for c in candidates if c.explosive_candidate),
             "extended": sum(1 for c in candidates if c.extended),
             "setup": sum(1 for c in candidates if c.setup_candidate),
+            "fresh_13g": sum(1 for c in candidates if c.fresh_13g),
             "fear_greed_score": fg_context.get("score") if fg_context else None,
             "fear_greed_label": fg_context.get("label") if fg_context else None,
             "csv_path": str(csv_path),
@@ -124,6 +125,7 @@ class ReportingAgent:
                 "explosive_count": sum(1 for c in candidates if c.explosive_candidate),
                 "extended_count": sum(1 for c in candidates if c.extended),
                 "setup_count": sum(1 for c in candidates if c.setup_candidate),
+                "fresh_13g_count": sum(1 for c in candidates if c.fresh_13g),
             },
             "top_candidates": [self._candidate_to_json(c) for c in top],
         }
@@ -154,6 +156,21 @@ class ReportingAgent:
             "extended": c.extended,
             "setup_score": round(c.setup_score, 1),
             "setup_candidate": c.setup_candidate,
+            "insider_buy_count": c.insider_buy_count,
+            "insider_buy_value": round(c.insider_buy_value, 0),
+            "insider_sell_count": c.insider_sell_count,
+            "fresh_13g": c.fresh_13g,
+            "fresh_13d": c.fresh_13d,
+            "next_catalyst": (
+                {
+                    "type": c.next_catalyst_type,
+                    "date": c.next_catalyst_date,
+                    "days": c.next_catalyst_days,
+                    "confidence": c.next_catalyst_confidence,
+                }
+                if c.next_catalyst_type
+                else None
+            ),
             "signals": c.signals,
             "score_breakdown": c.score_breakdown(),
         }
@@ -168,6 +185,7 @@ class ReportingAgent:
         tier_c = [c for c in candidates if c.tier == "C"][:5]
         setups = sorted((c for c in candidates if c.setup_candidate), key=lambda c: c.setup_score, reverse=True)
         extended = [c for c in candidates if c.extended]
+        watch_13g = [c for c in candidates if c.fresh_13g]
 
         fg_row = ""
         if fg_context:
@@ -189,6 +207,7 @@ class ReportingAgent:
             f"| Explosive candidates | {len(explosive)} |",
             f"| Extended (gated out of A/B) | {len(extended)} |",
             f"| Pre-breakout setups (shadow) | {len(setups)} |",
+            f"| Fresh 13G filings (watch) | {len(watch_13g)} |",
         ]
         if fg_row:
             lines.append(fg_row)
@@ -221,6 +240,16 @@ class ReportingAgent:
         if tier_c:
             lines += ["## Tier C — Speculative (top 5)", ""]
             lines += self._candidate_table(tier_c)
+            lines.append("")
+
+        if watch_13g:
+            lines += [
+                "## Watch — fresh 13G filings (new passive >5% holder)",
+                "",
+                "> Not a buy signal. Event study May–Nov 2026: fwd10 mean +6.8% vs −2.0% baseline (107 filings).",
+                "",
+            ]
+            lines += self._candidate_table(watch_13g[:10])
             lines.append("")
 
         if setups:

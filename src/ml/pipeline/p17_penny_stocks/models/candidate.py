@@ -75,6 +75,22 @@ class Candidate:
     # ── Catalyst ───────────────────────────────────────────────────────────
     catalyst_signals: List[str] = field(default_factory=list)
 
+    # ── Insider / ownership filings (P15 EDGAR cache, filed in the last N days) ──
+    insider_buy_count: int = 0  # Form 4 open-market purchases (code P)
+    insider_buy_value: float = 0.0
+    insider_buyers: int = 0  # distinct insiders buying
+    insider_sell_count: int = 0  # Form 4 open-market sales (code S)
+    insider_sell_value: float = 0.0
+    fresh_13g: bool = False  # initial Schedule 13G (new passive >5% holder) — "watch" email section
+    fresh_13d: bool = False  # initial Schedule 13D (new active >5% holder)
+    fresh_13dg_amend: bool = False  # 13D/A or 13G/A
+
+    # ── Scheduled catalyst (P20 Kestrel k20_catalysts, as seen on the run day) ──
+    next_catalyst_type: str = ""  # earnings | pdufa | adcom | clinical_readout | spinoff ...
+    next_catalyst_date: str = ""
+    next_catalyst_days: int | None = None
+    next_catalyst_confidence: str = ""  # confirmed | estimated
+
     # ── Sub-scores (each normalized 0–100) ────────────────────────────────
     momentum_score: float = 0.0
     volume_score: float = 0.0
@@ -142,6 +158,18 @@ class Candidate:
             "dilution_penalty": self.dilution_penalty,
             "dilution_signals": "|".join(self.dilution_signals),
             "catalyst_signals": "|".join(self.catalyst_signals),
+            "insider_buy_count": self.insider_buy_count,
+            "insider_buy_value": round(self.insider_buy_value, 0),
+            "insider_buyers": self.insider_buyers,
+            "insider_sell_count": self.insider_sell_count,
+            "insider_sell_value": round(self.insider_sell_value, 0),
+            "fresh_13g": self.fresh_13g,
+            "fresh_13d": self.fresh_13d,
+            "fresh_13dg_amend": self.fresh_13dg_amend,
+            "next_catalyst_type": self.next_catalyst_type,
+            "next_catalyst_date": self.next_catalyst_date,
+            "next_catalyst_days": self.next_catalyst_days,
+            "next_catalyst_confidence": self.next_catalyst_confidence,
             "momentum_score": round(self.momentum_score, 1),
             "volume_score": round(self.volume_score, 1),
             "technical_score": round(self.technical_score, 1),

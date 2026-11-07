@@ -13,15 +13,21 @@
 - [x] `replay.py` point-in-time replay with forward returns (2026-11-06)
 - [x] OHLCV always re-downloaded (no stale or partial intraday bars from the shared cache), no look-ahead past
   `target_date` (2026-11-07, CR-2026-11-06 §5)
+- [x] Stage 5.6 FilingsAgent - Form 4 buys/sells/clusters + fresh 13D/G from the P15 cache, annotation only
+  (2026-11-07, CR-2026-11-06 §6)
+- [x] Stage 5.7 KestrelCalendarAgent - next scheduled catalyst column (live runs only)
+- [x] Email "Watch — fresh 13G filings" section + signal-ledger `p17_fresh_13g` stream
 
 ### 🔄 IN PROGRESS
 - [x] Deploy the extension gate to the Pi (2026-11-07)
 - [ ] Deploy the OHLCV freshness fix; confirm the log shows one full batch download and few/no lagging tickers
 - [ ] Confirm the first gated runs (fewer Tier A/B emails, `extended=` / `setups=` in the `Result:` log line)
 - [ ] Watch the signal-ledger scorecard for `p17_tier_ab` (gated) and `p17_setup` once ≥ 20 cohorts mature
+- [ ] Deploy filings/calendar stages + 13D/G cache fix; backfill empty 13D/G days and the Form 4 gaps
+- [ ] Decide on a 13G score weight once `p17_fresh_13g` has ≥ 20 matured cohorts
 
 ### 🚀 PLANNED ENHANCEMENTS
-- [ ] Scheduled catalysts known in advance: PDUFA / AdCom dates, earnings dates, insider Form 4 buys, 13D filings
+- [ ] Kestrel catalysts point-in-time history (needed before calendar events can carry score weight)
 - [ ] Intraday trigger: P19 alerts when watchlist names cross time-of-day-normalised RVOL + price levels
 - [ ] Two-tier universe: looser liquidity (median volume / ~$300–500k dollar volume, pre-jump market cap & float) for
   the watchlist, strict liquidity only for the actionable alert
@@ -35,6 +41,8 @@
 - [ ] `ReportingAgent.get_alert_candidates` and `P17AlertConfig.min_alert_score` are unused
 
 ## Known Issues
+- Kestrel `k20_catalysts` never marks past events `passed` and has duplicate earnings rows (agent filters past
+  dates itself).
 - ~3% of the universe is missing from the snapshot each run (Yahoo fetch failures / rate limits), including some
   names that later produced signals.
 - Replay is limited to tickers that passed the universe filters on each day (only those rows are saved).
@@ -44,6 +52,8 @@
 - [x] Unit tests for scoring (incl. extension gate and setup), technicals (incl. setup features), replay helpers,
   notification, catalyst, config, pipeline, backtest, strategy sim
 - [x] Tests for the OHLCV freshness rule (`tests/test_market_agent.py`)
+- [x] Tests for filings / Kestrel agents, watch email, filing signals (`test_filings_agent.py`,
+  `test_kestrel_calendar_agent.py`, `test_notification_agent.py`, `test_scoring_agent.py`)
 
 ## Documentation Updates
 - [x] README / Requirements / Design / Tasks (2026-11-06)

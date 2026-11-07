@@ -292,6 +292,24 @@ class ScoringAgent:
     # ── Signal collection ──────────────────────────────────────────────────
 
     @staticmethod
+    def _filing_signals(c: Candidate) -> List[str]:
+        """Annotation-only signals from Form 4 / 13D/G filings and the Kestrel calendar (no score weight)."""
+        out: List[str] = []
+        if c.fresh_13g:
+            out.append("fresh_13g")
+        if c.fresh_13d:
+            out.append("fresh_13d")
+        if c.insider_buy_count:
+            out.append(f"insider_buy_{c.insider_buyers}x_{c.insider_buy_value / 1000:.0f}k")
+        if c.insider_buyers >= 2:
+            out.append("insider_cluster")
+        if c.insider_sell_count:
+            out.append(f"insider_sell_{c.insider_sell_count}x_{c.insider_sell_value / 1000:.0f}k")
+        if c.next_catalyst_type and c.next_catalyst_days is not None:
+            out.append(f"next_{c.next_catalyst_type}_{c.next_catalyst_days}d_{c.next_catalyst_confidence or 'na'}")
+        return out
+
+    @staticmethod
     def _collect_signals(c: Candidate) -> List[str]:
         signals: List[str] = []
 
@@ -321,5 +339,6 @@ class ScoringAgent:
             signals.append(f"extended_5d_{c.price_5d_return:+.0%}_{c.extension_atr:.1f}atr")
         if c.setup_candidate:
             signals.append(f"setup_{c.setup_score:.0f}")
+        signals.extend(ScoringAgent._filing_signals(c))
 
         return signals

@@ -7,6 +7,8 @@ Coordinates all pipeline stages:
   Stage 3: Technical indicator computation  (TechnicalAgent)
   Stage 4: Short squeeze enrichment         (ShortSqueezeAgent)
   Stage 5: Dilution risk detection          (DilutionAgent)
+  Stage 5.6: Form 4 / 13D/G annotation     (FilingsAgent, P15 cache only)
+  Stage 5.7: Scheduled-catalyst annotation (KestrelCalendarAgent, P20 k20_catalysts)
   Stage 6: Composite scoring + tier assign  (ScoringAgent; extension gate + setup score)
   Stage 7: Report generation                (ReportingAgent)
 
@@ -29,6 +31,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p17_penny_stocks.agents.catalyst_agent import CatalystAgent
 from src.ml.pipeline.p17_penny_stocks.agents.dilution_agent import DilutionAgent
+from src.ml.pipeline.p17_penny_stocks.agents.filings_agent import FilingsAgent
+from src.ml.pipeline.p17_penny_stocks.agents.kestrel_calendar_agent import KestrelCalendarAgent
 from src.ml.pipeline.p17_penny_stocks.agents.market_agent import MarketAgent
 from src.ml.pipeline.p17_penny_stocks.agents.notification_agent import NotificationAgent
 from src.ml.pipeline.p17_penny_stocks.agents.reporting_agent import ReportingAgent
@@ -114,6 +118,8 @@ class P17Pipeline:
             self._results_dir,
             self.target_date,
         )
+        self._filings_agent = FilingsAgent(cfg.filings_config, self.target_date)
+        self._kestrel_agent = KestrelCalendarAgent(cfg.filings_config, self.target_date)
         self._scoring_agent = ScoringAgent(cfg.scoring_config, self._ss_agent)
         self._reporting_agent = ReportingAgent(
             cfg.scoring_config,
@@ -124,6 +130,7 @@ class P17Pipeline:
             cfg.alert_config,
             self.target_date,
             cfg.user_id,
+            filings_config=cfg.filings_config,
         )
 
     # ── Run ────────────────────────────────────────────────────────────────
@@ -235,6 +242,23 @@ class P17Pipeline:
 
         job_results["catalyst"] = self._run_job("Stage5.5 Catalyst", stage_catalyst)
 
+        # ── Stage 5.6: Form 4 / 13D/G (annotation, P15 cache only) ────────
+        def stage_filings() -> Dict:
+            self._filings_agent.run(candidates)
+            return {
+                "insider_buys": sum(1 for c in candidates if c.insider_buy_count),
+                "fresh_13g": sum(1 for c in candidates if c.fresh_13g),
+            }
+
+        job_results["filings"] = self._run_job("Stage5.6 Filings", stage_filings)
+
+        # ── Stage 5.7: Scheduled catalysts from P20 Kestrel (annotation) ──
+        def stage_calendar() -> Dict:
+            self._kestrel_agent.run(candidates)
+            return {"annotated": sum(1 for c in candidates if c.next_catalyst_type)}
+
+        job_results["calendar"] = self._run_job("Stage5.7 Calendar", stage_calendar)
+
         # ── Stage 6: Scoring ───────────────────────────────────────────────
         def stage6() -> Dict:
             self._scoring_agent.run(candidates)
@@ -269,7 +293,7 @@ class P17Pipeline:
         _logger.info("=" * 70)
         _logger.info("P17 Pipeline Completed in %.1fs", elapsed)
         _logger.info(
-            "Result: %d candidates | A=%d B=%d C=%d | explosive=%d | extended=%d | setups=%d",
+            "Result: %d candidates | A=%d B=%d C=%d | explosive=%d | extended=%d | setups=%d | fresh_13g=%d",
             len(candidates),
             report_meta.get("tier_a", 0),
             report_meta.get("tier_b", 0),
@@ -277,6 +301,7 @@ class P17Pipeline:
             report_meta.get("explosive", 0),
             report_meta.get("extended", 0),
             report_meta.get("setup", 0),
+            report_meta.get("fresh_13g", 0),
         )
         _logger.info("=" * 70)
 
