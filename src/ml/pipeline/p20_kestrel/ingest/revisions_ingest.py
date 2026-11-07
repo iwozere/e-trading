@@ -13,6 +13,11 @@ signals so the score is useful immediately rather than needing a cold start:
   snapshots before a first comparator exists — the literal "forward-EPS
   revisions up 60d" signal named in §4.2).
 
+FMP calls are capped by `REVISIONS_FMP_DAILY_CALL_BUDGET`: each run fetches
+FMP for a rotating slice of tickers only, and every other ticker is scored
+with its latest stored FMP values (up to `REVISIONS_FMP_CARRY_FORWARD_DAYS`
+old), so the score does not jump between FMP and non-FMP days.
+
 `REVISIONS_FEED_AVAILABLE` in config.py stays False (shadow mode: this job
 writes signals, but sleeve_a.py's scoring ignores them) until the values have
 been reviewed for a few weeks. See docs/Design.md for the rollout plan.
@@ -25,7 +30,7 @@ import sys
 import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Set
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -38,6 +43,8 @@ from src.ml.pipeline.p20_kestrel.config import (
     REVISIONS_EPS_DELTA_MAX_PTS,
     REVISIONS_EPS_DELTA_TOLERANCE_DAYS,
     REVISIONS_EPS_DELTA_WINDOW_DAYS,
+    REVISIONS_FMP_CARRY_FORWARD_DAYS,
+    REVISIONS_FMP_DAILY_CALL_BUDGET,
     REVISIONS_FINNHUB_FULL_CREDIT_MOMENTUM,
     REVISIONS_FINNHUB_MAX_PTS,
     REVISIONS_GRADES_FULL_CREDIT_NET,
@@ -72,6 +79,8 @@ _UPSERT_CHUNK_TICKERS = 50  # flush signals every N tickers so a timeout keeps t
 # (~40 Finnhub calls/min); without them the loop hit Finnhub's limit and 2026-11-05 kept 77/375 tickers.
 _FINNHUB_MIN_INTERVAL_S = 1.1
 _FINNHUB_429_BACKOFF_S = 30.0
+_FMP_CALLS_PER_TICKER = 2  # analyst-estimates + grades
+_ROTATION_EPOCH = date(2000, 1, 3)  # a Monday; anchors the weekday counter for the FMP rotation
 
 
 class _Throttle:
@@ -107,6 +116,41 @@ class _FmpGate:
         if status_code == 429 and not self.closed:
             self.closed = True
             _logger.warning("FMP %s returned 429 (quota/bandwidth limit); skipping FMP for the rest of this run", endpoint)
+
+
+def _weekday_number(day: date) -> int:
+    """Count Mon-Fri days from ``_ROTATION_EPOCH`` to ``day`` so the FMP rotation advances once per trading day."""
+    full_weeks, rest = divmod((day - _ROTATION_EPOCH).days, 7)
+    return full_weeks * 5 + min(rest, 5)
+
+
+def _fmp_slice(tickers: List[str], day: date, call_budget: int) -> Set[str]:
+    """
+    Pick the tickers that get fresh FMP calls today.
+
+    Args:
+        tickers: Sorted run universe.
+        day: Run date; consecutive weekdays get consecutive, wrapping windows of ``tickers``.
+        call_budget: Max FMP calls for the run (``_FMP_CALLS_PER_TICKER`` per ticker).
+
+    Returns:
+        The ticker subset for today; every ticker when the budget covers the whole universe.
+    """
+    per_run = max(0, call_budget // _FMP_CALLS_PER_TICKER)
+    if per_run >= len(tickers):
+        return set(tickers)
+    if per_run == 0:
+        return set()
+    start = (_weekday_number(day) * per_run) % len(tickers)
+    return {tickers[(start + i) % len(tickers)] for i in range(per_run)}
+
+
+def _latest_stored_value(ticker: str, signal_type: str, today: date) -> float | None:
+    """Return the newest stored value of ``signal_type`` within ``REVISIONS_FMP_CARRY_FORWARD_DAYS``, or None."""
+    rows = get_signals(ticker, signal_type, start_date=today - timedelta(days=REVISIONS_FMP_CARRY_FORWARD_DAYS), end_date=today)
+    if not rows:
+        return None
+    return float(max(rows, key=lambda r: r["date"])["value"])
 
 
 def _get_target_tickers() -> List[str]:
@@ -332,6 +376,7 @@ def _compute_ticker_signals(
     today: date,
     gate: _FmpGate | None = None,
     finnhub_throttle: _Throttle | None = None,
+    fetch_fmp: bool = True,
 ) -> Dict[str, float]:
     """
     Fetch all three raw signals for one ticker and blend them into `revisions_score`.
@@ -343,6 +388,8 @@ def _compute_ticker_signals(
         today: Today's date.
         gate: Optional FMP circuit breaker shared across the run.
         finnhub_throttle: Optional Finnhub pacer shared across the run.
+        fetch_fmp: False when the ticker is outside today's FMP budget slice. FMP values that are not
+            fetched fresh (or fail) are taken from the latest stored rows for scoring only, never re-written.
 
     Returns:
         Dict of `signal_type -> value` for every signal successfully fetched,
@@ -351,13 +398,19 @@ def _compute_ticker_signals(
     """
     out: Dict[str, float] = {}
 
-    eps_avg = _fetch_fmp_eps_avg_next_fy(ticker, fmp_api_key, today, gate)
+    eps_avg = _fetch_fmp_eps_avg_next_fy(ticker, fmp_api_key, today, gate) if fetch_fmp else None
     if eps_avg is not None:
         out[_SIGNAL_EPS_AVG] = eps_avg
+    else:
+        eps_avg = _latest_stored_value(ticker, _SIGNAL_EPS_AVG, today)
 
-    grades_net = _fetch_fmp_grades_net_60d(ticker, fmp_api_key, today, gate)
-    if grades_net is not None:
-        out[_SIGNAL_GRADES_NET_60D] = float(grades_net)
+    grades_fresh = _fetch_fmp_grades_net_60d(ticker, fmp_api_key, today, gate) if fetch_fmp else None
+    grades_net: float | None = None
+    if grades_fresh is not None:
+        grades_net = float(grades_fresh)
+        out[_SIGNAL_GRADES_NET_60D] = grades_net
+    else:
+        grades_net = _latest_stored_value(ticker, _SIGNAL_GRADES_NET_60D, today)
 
     finnhub_momentum = _fetch_finnhub_momentum(ticker, finnhub_api_key, finnhub_throttle)
     if finnhub_momentum is not None:
@@ -415,12 +468,22 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
 
         gate = _FmpGate()
         finnhub_throttle = _Throttle(_FINNHUB_MIN_INTERVAL_S)
+        fmp_tickers = _fmp_slice(tickers, target_date, REVISIONS_FMP_DAILY_CALL_BUDGET)
+        _logger.info(
+            "Revisions ingest: FMP for %d/%d tickers today (budget %d calls)", len(fmp_tickers), len(tickers), REVISIONS_FMP_DAILY_CALL_BUDGET
+        )
         pending: List[Dict[str, Any]] = []
         processed = 0
         rows_upserted = 0
         for idx, ticker in enumerate(tickers, start=1):
             signals = _compute_ticker_signals(
-                ticker, fmp_api_key, finnhub_api_key, target_date, gate, finnhub_throttle=finnhub_throttle
+                ticker,
+                fmp_api_key,
+                finnhub_api_key,
+                target_date,
+                gate,
+                finnhub_throttle=finnhub_throttle,
+                fetch_fmp=ticker in fmp_tickers,
             )
             if signals:
                 processed += 1
@@ -452,6 +515,7 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
             "tickers_total": len(tickers),
             "rows_upserted": rows_upserted,
             "fmp_available": not gate.closed,
+            "fmp_tickers": len(fmp_tickers),
         }
 
     except Exception as exc:

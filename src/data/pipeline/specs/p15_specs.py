@@ -37,7 +37,8 @@ SPECS: List[PluginSpec] = [
     PluginSpec(
         name="P15 Options Daily",
         category="p15",
-        cron="0 6 * * 1-5",
+        # 03:30, not 06:00: the 35-47 min run collided with P22 ClinicalTrials + openFDA at 05:30-07:00.
+        cron="30 3 * * 1-5",
         script_path="src/ml/pipeline/p15_hidden_deps/p15_options_daily.py",
         timeout_seconds=21600,
         description="~3-4k optionable NASDAQ symbols; runs before p15_daily.py's 13:00 UTC options_putcall read.",

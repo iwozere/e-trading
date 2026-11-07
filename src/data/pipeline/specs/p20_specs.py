@@ -63,7 +63,11 @@ SPECS: List[PluginSpec] = [
         name="P20 Social Sentiment Poll", category="p20", cron="30 6 * * 1-5",
         script_path=f"{_SCRIPT_BASE}/run_social_poll.py", timeout_seconds=900,
     ),
-    PluginSpec(name="P20 AV Sentiment", category="p20", cron="45 6 * * 1-5", script_path=f"{_SCRIPT_BASE}/run_av_sentiment.py"),
+    PluginSpec(
+        name="P20 AV Sentiment", category="p20", cron="45 6 * * 1-5", script_path=f"{_SCRIPT_BASE}/run_av_sentiment.py",
+        enabled=False,
+        description="Disabled 2026-11-07: Alpha Vantage NEWS_SENTIMENT became a premium-only endpoint (0 rows every day).",
+    ),
     PluginSpec(
         name="P20 Sentiment Aggregate", category="p20", cron="0 7 * * 1-5",
         script_path=f"{_SCRIPT_BASE}/run_sentiment_aggregate.py", timeout_seconds=300,
@@ -91,7 +95,8 @@ SPECS: List[PluginSpec] = [
     PluginSpec(
         name="P20 Catalyst Sync",
         category="p20",
-        cron="45 20 * * 1-5",
+        # 20:50, not 20:45: shares the Finnhub 60/min quota with Revisions Ingest (20:30, ~8 min).
+        cron="50 20 * * 1-5",
         script_path=f"{_SCRIPT_BASE}/run_catalyst_sync.py",
         timeout_seconds=600,
         extra_task_params={
@@ -199,7 +204,7 @@ SPECS: List[PluginSpec] = [
     PluginSpec(
         name="P20 Risk Check",
         category="p20",
-        cron="*/30 9-17 * * 1-5",
+        cron="*/30 14-21 * * 1-5",  # US regular session in both EST (14:30-21:00) and EDT (13:30-20:00)
         script_path=f"{_SCRIPT_BASE}/run_risk_check.py",
         timeout_seconds=300,
         extra_task_params={
@@ -225,7 +230,8 @@ SPECS: List[PluginSpec] = [
     PluginSpec(
         name="P20 Weekly Maintenance",
         category="p20",
-        cron="0 5 * * 1",
+        # Sunday, not Monday 05:00: the ~70 min run overlapped the whole weekday P22/P20 morning chain.
+        cron="0 5 * * 0",
         script_path=f"{_SCRIPT_BASE}/run_weekly_maintenance.py",
         timeout_seconds=10800,
         description="3000+ tickers, single-threaded fundamentals fetch; chunked upserts survive a timeout.",

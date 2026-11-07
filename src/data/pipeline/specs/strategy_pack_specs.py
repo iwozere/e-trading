@@ -26,6 +26,9 @@ from src.data.pipeline.base_plugin import PluginSpec
 
 _SCRIPT = "src/strategy_pack/run.py"
 
+# All Strategy Pack schedules disabled 2026-11-07 at the owner's request (no value for them).
+# Kept as disabled specs, not deleted, so register_jobs switches the prod rows off.
+
 
 def _args(strategy_num: str, variant: str, config_name: str) -> list[str]:
     return ["run", "-s", strategy_num, "-v", variant, "-c", f"config/strategy_pack/schedules/{config_name}"]
@@ -38,6 +41,7 @@ SPECS: List[PluginSpec] = [
         cron="0 1 1 * *",
         script_path=_SCRIPT,
         script_args=_args("1", "A", "sp1_monthly.json"),
+        enabled=False,
         timeout_seconds=1800,
     ),
     PluginSpec(
@@ -46,6 +50,7 @@ SPECS: List[PluginSpec] = [
         cron="30 22 * * *",
         script_path=_SCRIPT,
         script_args=_args("2", "A", "sp2_daily.json"),
+        enabled=False,
         timeout_seconds=900,
     ),
     PluginSpec(
@@ -54,6 +59,7 @@ SPECS: List[PluginSpec] = [
         cron="0 22 * * 0",
         script_path=_SCRIPT,
         script_args=_args("3", "A", "sp3_weekly.json"),
+        enabled=False,
         timeout_seconds=900,
     ),
     PluginSpec(
@@ -62,6 +68,7 @@ SPECS: List[PluginSpec] = [
         cron="0 2 1 1,4,7,10 *",
         script_path=_SCRIPT,
         script_args=_args("4", "A", "sp4_quarterly.json"),
+        enabled=False,
         timeout_seconds=1800,
     ),
     PluginSpec(
@@ -70,6 +77,7 @@ SPECS: List[PluginSpec] = [
         cron="2 0,4,8,12,16,20 * * *",
         script_path=_SCRIPT,
         script_args=_args("5", "A", "sp5_btc_4h.json"),
+        enabled=False,
         timeout_seconds=600,
     ),
     PluginSpec(
@@ -78,6 +86,7 @@ SPECS: List[PluginSpec] = [
         cron="2 * * * *",
         script_path=_SCRIPT,
         script_args=_args("5", "A", "sp5_btc_1h.json"),
+        enabled=False,
         timeout_seconds=600,
     ),
     PluginSpec(
@@ -86,6 +95,7 @@ SPECS: List[PluginSpec] = [
         cron="2 14-22 * * 1-5",
         script_path=_SCRIPT,
         script_args=_args("5", "A", "sp5_spy_1h.json"),
+        enabled=False,
         timeout_seconds=600,
         description="14-22 UTC covers US RTH across both DST regimes.",
     ),
@@ -95,6 +105,7 @@ SPECS: List[PluginSpec] = [
         cron="2 0,4,8,12,16,20 * * *",
         script_path=_SCRIPT,
         script_args=_args("6", "A", "sp6_btc_4h.json"),
+        enabled=False,
         timeout_seconds=600,
     ),
     PluginSpec(
@@ -103,6 +114,7 @@ SPECS: List[PluginSpec] = [
         cron="5 0 * * *",
         script_path=_SCRIPT,
         script_args=_args("6", "A", "sp6_btc_1d.json"),
+        enabled=False,
         timeout_seconds=600,
         description="Crypto 1d bar closes at 00:00 UTC; fires at 00:05 UTC for a clean right-after-close run.",
     ),

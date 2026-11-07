@@ -25,13 +25,12 @@ from src.data.pipeline.base_plugin import PluginSpec
 _SCRIPT_BASE = "src/ml/pipeline/p21_momentum/jobs"
 
 SPECS: List[PluginSpec] = [
-    # 16:30 ET == 20:30 UTC (EST) / 21:30 UTC (EDT); scheduled at the winter-time
-    # value — DST drift is a known, shared limitation across every ET-based cron
-    # job in this repo, not solved here.
+    # Cron is UTC. 21:30 UTC == 16:30 EST / 17:30 EDT — after the US close in both
+    # regimes. (The old 20:30 UTC was 16:30 EDT but 15:30 EST, i.e. before the close.)
     PluginSpec(
         name="p21_monthly_rebalance",
         category="p21",
-        cron="30 20 * * 1-5",
+        cron="30 21 * * 1-5",
         script_path=f"{_SCRIPT_BASE}/run_monthly_rebalance.py",
         extra_task_params={
             "notification_rules": {"conditions": [
@@ -46,7 +45,7 @@ SPECS: List[PluginSpec] = [
     PluginSpec(
         name="p21_stop_execute",
         category="p21",
-        cron="35 13 * * 1-5",  # 09:35 ET
+        cron="35 14 * * 1-5",  # 09:35 EST / 10:35 EDT (13:35 UTC was pre-market in EST)
         script_path=f"{_SCRIPT_BASE}/run_stop_execute.py",
         extra_task_params={
             "notification_rules": {"conditions": [
@@ -58,7 +57,7 @@ SPECS: List[PluginSpec] = [
     PluginSpec(
         name="p21_monthly_execute",
         category="p21",
-        cron="45 13 * * 1-5",  # 09:45 ET
+        cron="45 14 * * 1-5",  # 09:45 EST / 10:45 EDT
         script_path=f"{_SCRIPT_BASE}/run_monthly_execute.py",
         extra_task_params={
             "notification_rules": {"conditions": [
@@ -72,7 +71,7 @@ SPECS: List[PluginSpec] = [
     PluginSpec(
         name="p21_daily_mark",
         category="p21",
-        cron="30 20 * * 1-5",
+        cron="30 21 * * 1-5",
         script_path=f"{_SCRIPT_BASE}/run_daily_mark.py",
         extra_task_params={
             "notification_rules": {"conditions": [

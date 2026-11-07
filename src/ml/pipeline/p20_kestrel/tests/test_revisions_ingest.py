@@ -190,6 +190,7 @@ def test_compute_ticker_signals_blends_all_three(monkeypatch):
     monkeypatch.setattr(revisions_ingest, "_fetch_fmp_grades_net_60d", lambda *a, **kw: 4)
     monkeypatch.setattr(revisions_ingest, "_fetch_finnhub_momentum", lambda *a, **kw: 1.0)
     monkeypatch.setattr(revisions_ingest, "_eps_delta_points", lambda *a, **kw: 3.0)
+    monkeypatch.setattr(revisions_ingest, "get_signals", lambda *a, **kw: [])
 
     signals = _compute_ticker_signals("NVDA", "fmp-key", "finnhub-key", _TODAY)
 
@@ -204,8 +205,84 @@ def test_compute_ticker_signals_all_sources_fail_returns_empty(monkeypatch):
     monkeypatch.setattr(revisions_ingest, "_fetch_fmp_eps_avg_next_fy", lambda *a, **kw: None)
     monkeypatch.setattr(revisions_ingest, "_fetch_fmp_grades_net_60d", lambda *a, **kw: None)
     monkeypatch.setattr(revisions_ingest, "_fetch_finnhub_momentum", lambda *a, **kw: None)
+    monkeypatch.setattr(revisions_ingest, "get_signals", lambda *a, **kw: [])
 
     assert _compute_ticker_signals("NVDA", "fmp-key", "finnhub-key", _TODAY) == {}
+
+
+def test_compute_ticker_signals_outside_fmp_slice_scores_with_stored_values(monkeypatch):
+    def _no_fmp(*a, **kw):
+        raise AssertionError("FMP must not be called outside today's budget slice")
+
+    stored = {
+        "fmp_grade_net_60d": [{"date": _TODAY - timedelta(days=6), "value": 1.0}, {"date": _TODAY - timedelta(days=1), "value": 4.0}],
+        "fmp_eps_avg_next_fy": [{"date": _TODAY - timedelta(days=1), "value": 10.0}],
+    }
+    eps_seen: list[float | None] = []
+
+    def _fake_eps_points(ticker, current, today):
+        eps_seen.append(current)
+        return 0.0
+
+    monkeypatch.setattr(revisions_ingest, "_fetch_fmp_eps_avg_next_fy", _no_fmp)
+    monkeypatch.setattr(revisions_ingest, "_fetch_fmp_grades_net_60d", _no_fmp)
+    monkeypatch.setattr(revisions_ingest, "_fetch_finnhub_momentum", lambda *a, **kw: 0.0)
+    monkeypatch.setattr(revisions_ingest, "_eps_delta_points", _fake_eps_points)
+    monkeypatch.setattr(revisions_ingest, "get_signals", lambda ticker, signal_type, **kw: stored.get(signal_type, []))
+
+    signals = _compute_ticker_signals("NVDA", "fmp-key", "finnhub-key", _TODAY, fetch_fmp=False)
+
+    # carried values feed the score (latest grades row = 4 -> full 8 pts) but are not re-written for today
+    assert signals == {"finnhub_rec_momentum": 0.0, "revisions_score": 8.0}
+    assert eps_seen == [10.0]
+
+
+# ---------------------------------------------------------------------------
+# FMP daily budget rotation
+# ---------------------------------------------------------------------------
+
+
+def test_weekday_number_skips_weekends():
+    friday, saturday, sunday, monday = date(2026, 11, 6), date(2026, 11, 7), date(2026, 11, 8), date(2026, 11, 9)
+    n = revisions_ingest._weekday_number(friday)
+    assert revisions_ingest._weekday_number(saturday) == n + 1
+    assert revisions_ingest._weekday_number(sunday) == n + 1
+    assert revisions_ingest._weekday_number(monday) == n + 1
+
+
+def test_fmp_slice_covers_universe_over_consecutive_weekdays():
+    tickers = [f"T{i:03d}" for i in range(375)]
+    day = date(2026, 11, 16)  # Monday
+    covered: set[str] = set()
+    for offset in range(5):  # Mon-Fri
+        todays = revisions_ingest._fmp_slice(tickers, day + timedelta(days=offset), call_budget=150)
+        assert len(todays) == 75
+        covered |= todays
+    assert covered == set(tickers)
+
+
+def test_fmp_slice_all_tickers_when_budget_suffices():
+    tickers = ["A", "B", "C"]
+    assert revisions_ingest._fmp_slice(tickers, _TODAY, call_budget=6) == {"A", "B", "C"}
+    assert revisions_ingest._fmp_slice(tickers, _TODAY, call_budget=1) == set()
+
+
+def test_run_fetches_fmp_only_for_todays_slice(monkeypatch, run_env):
+    tickers = [f"T{i}" for i in range(10)]
+    monkeypatch.setattr(revisions_ingest, "_get_target_tickers", lambda: tickers)
+    monkeypatch.setattr(revisions_ingest, "REVISIONS_FMP_DAILY_CALL_BUDGET", 6)
+    flags: dict[str, bool] = {}
+
+    def _fake_compute(ticker, *a, fetch_fmp=True, **kw):
+        flags[ticker] = fetch_fmp
+        return {"revisions_score": 1.0}
+
+    monkeypatch.setattr(revisions_ingest, "_compute_ticker_signals", _fake_compute)
+
+    result = run(as_of_date=_TODAY)
+
+    assert result["fmp_tickers"] == 3
+    assert sum(flags.values()) == 3
 
 
 # ---------------------------------------------------------------------------

@@ -74,7 +74,8 @@ def check_sentiment_staleness(today: date) -> List[str]:
         List of warning strings.
     """
     warnings: List[str] = []
-    for job in ("gdelt_process", "social_poll", "av_sentiment_budgeted"):
+    # av_sentiment_budgeted dropped 2026-11-07: the job is disabled (AV news sentiment went premium-only).
+    for job in ("gdelt_process", "social_poll"):
         max_stale = STALENESS_DAYS.get("gdelt" if "gdelt" in job else "social", 3)
         fresh = any(
             get_job_run(job, today - timedelta(days=offset)) in ("ok", "skipped") for offset in range(1, max_stale + 1)

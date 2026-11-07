@@ -12,7 +12,7 @@ import json
 import sys
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Set, cast
+from typing import Any, Dict, List, Optional, Set, cast
 
 import pandas as pd
 
@@ -38,6 +38,8 @@ _JOB_NAME = "ingest_filings"
 _P15_8K_INDEX_DIR = DATA_CACHE_PATH / "edgar" / "8k" / "index"
 _P15_FORM4_DIR = DATA_CACHE_PATH / "edgar" / "13f" / "form4"
 _P15_13DG_DIR = DATA_CACHE_PATH / "edgar" / "13f" / "13dg"
+# Monday's run reads Fri + Sat + Sun; every other weekday reads just the day before.
+_MONDAY_LOOKBACK_DAYS = 3
 _FORM4_BUY_CODES = {"P", "A"}  # P = open market purchase, A = grant
 
 
@@ -302,19 +304,40 @@ def _process_13dg_activist(
     return matched
 
 
-def run(as_of_date: date | None = None, lookback_days: int = 1) -> Dict[str, Any]:
+def _dates_to_check(target_date: date, lookback_days: Optional[int]) -> List[date]:
+    """
+    Return the filing dates whose P15/P18 EDGAR caches this run should read.
+
+    The caches for day D are written the following morning (8-K index ~06:15 UTC, Form 4 ~07:05 UTC), so an
+    evening run on D can only see D-1 and earlier. Reading D itself always found nothing.
+
+    Args:
+        target_date: The run date.
+        lookback_days: Number of days before ``target_date`` to read; ``None`` means 3 on Mondays (covers the
+            weekend) and 1 otherwise.
+
+    Returns:
+        Dates ``target_date - 1`` back to ``target_date - lookback_days``, newest first.
+    """
+    if lookback_days is None:
+        lookback_days = _MONDAY_LOOKBACK_DAYS if target_date.weekday() == 0 else 1
+    return [target_date - timedelta(days=i) for i in range(1, lookback_days + 1)]
+
+
+def run(as_of_date: date | None = None, lookback_days: Optional[int] = None) -> Dict[str, Any]:
     """
     Discover and ingest filings for the watchlist + positions universe.
 
     Args:
-        as_of_date: Date to process (defaults to today).
-        lookback_days: Number of days to look back in P15 cache (default 1).
+        as_of_date: Run date (defaults to today); filings are read for the day(s) before it.
+        lookback_days: Number of prior days to read from the P15 cache (default: 3 on Mondays, else 1).
 
     Returns:
         Summary dict.
     """
     target_date = as_of_date or date.today()
-    _logger.info("Filings ingest for %s (lookback=%d)", target_date, lookback_days)
+    dates_to_check = _dates_to_check(target_date, lookback_days)
+    _logger.info("Filings ingest for %s (filing dates %s)", target_date, ", ".join(d.isoformat() for d in dates_to_check))
     start_job_run(_JOB_NAME, target_date)
 
     try:
@@ -324,8 +347,6 @@ def run(as_of_date: date | None = None, lookback_days: int = 1) -> Dict[str, Any
         form4_buys = 0
         activist_matches = 0
         llm_queue: List[Dict[str, Any]] = []
-
-        dates_to_check = [target_date - timedelta(days=i) for i in range(lookback_days)]
 
         cik_map = _build_cik_to_ticker()
 

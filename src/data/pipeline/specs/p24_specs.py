@@ -1,8 +1,8 @@
 """
 P24 Falling Knife — plugin specs (spec §9.1).
 
-Daily and weekly live scans. Registered **disabled**: the 2024+ holdout failed the go/no-go gate, so the scan runs
-as paper + notify only once the owner enables it. No ``notification_rules``: the scan sends its own Telegram/email
+Daily and weekly live scans. The 2024+ holdout failed the go/no-go gate, so the scans run as paper + notify only.
+The daily scan is enabled (matches prod since 2026-11-06); the weekly scan stays disabled. No ``notification_rules``: the scan sends its own Telegram/email
 messages with charts (``p24_falling_knife/notify.py``), like P05.
 
 The daily scan runs at 22:45 UTC Mon–Fri, after the US close in both EST and EDT (22:30 already hosts three jobs);
@@ -25,7 +25,6 @@ SPECS: List[PluginSpec] = [
         script_path=_SCRIPT,
         script_args=["--timeframe", "daily"],
         timeout_seconds=10800,
-        enabled=False,
         description="Falling-knife signals on the daily close, forming watchlist, paper exits; self-notifies.",
     ),
     PluginSpec(

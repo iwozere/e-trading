@@ -95,6 +95,12 @@ AV_DAILY_QUOTA: int = 20
 REVISIONS_GRADES_WINDOW_DAYS: int = 60
 REVISIONS_EPS_DELTA_WINDOW_DAYS: int = 60
 REVISIONS_EPS_DELTA_TOLERANCE_DAYS: int = 7  # +/- around the 60d mark when matching a past snapshot
+# FMP free tier = 250 calls/day shared with P05's earnings calendar and DataManager fallbacks. Revisions makes
+# 2 calls per ticker, so 150 calls = 75 tickers/day in rotation (~375 tickers -> each refreshed every 5 trading
+# days, which still lands a snapshot inside the +/-7d EPS-delta window).
+REVISIONS_FMP_DAILY_CALL_BUDGET: int = 150
+# Tickers outside today's FMP slice score with their latest stored FMP values up to this old.
+REVISIONS_FMP_CARRY_FORWARD_DAYS: int = 10
 
 REVISIONS_FINNHUB_MAX_PTS: float = 12.0
 REVISIONS_GRADES_MAX_PTS: float = 8.0
