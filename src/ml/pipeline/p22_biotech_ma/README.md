@@ -57,6 +57,15 @@ python -m src.ml.pipeline.p22_biotech_ma.cli.deal_entry_cli list-deals
 python -m src.ml.pipeline.p22_biotech_ma.cli.deal_entry_cli amend 6468 --by-item --reviewer ak --upfront-per-share 65.60
 ```
 
+`scan` searches SC 14D9, DEFM14A, DEFM14C and S-4 filings that list a universe company's CIK. Deals it
+cannot see (only the acquirer filed, foreign schemes of arrangement) are queued by hand from a filing URL,
+then labelled with `enter`/`link`/`reject` as usual:
+
+```bash
+python -m src.ml.pipeline.p22_biotech_ma.cli.deal_entry_cli add-candidate --cik 1586105 --form S-4 --filed 2020-04-08 \
+    --url https://www.sec.gov/Archives/edgar/data/1808665/000104746920002165/a2241255zs-4.htm --note "Assertio S-4 for Zyla"
+```
+
 `amend` corrects an already-entered deal (by `deal_id`, or by the review item it came from with
 `--by-item`); premiums and reverse-merger flags are re-derived, `-` clears a field.
 

@@ -10,7 +10,7 @@ into one of:
 - `candidates_reviewed_no_deal` — every candidate was reviewed and none became a deal (rejected as
   acquirer side, say). Most are genuine non-deals; worth a glance when the company vanished soon after;
 - `no_candidate` — nothing in the queue. Either a non-deal exit (bankruptcy, delisting, going dark)
-  or a deal the SC 14D9/DEFM14A/S-4 scan cannot see (a scheme of arrangement for a foreign issuer, a
+  or a deal the SC 14D9/DEFM14A/DEFM14C/S-4 scan cannot see (a scheme of arrangement for a foreign issuer, a
   merger approved by written consent with only an 8-K and information statement). These are the label
   gaps to check by hand.
 

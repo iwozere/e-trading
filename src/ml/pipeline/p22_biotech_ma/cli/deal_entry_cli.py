@@ -51,6 +51,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.data.db.services.database_service import DatabaseService
 from src.ml.pipeline.p22_biotech_ma.ingest.acquirer_config import load_acquirers
 from src.ml.pipeline.p22_biotech_ma.ingest.activist_positions import parse_source_url
+from src.ml.pipeline.p22_biotech_ma.ingest.deal_candidates import ManualCandidateError, add_manual_candidate
 from src.ml.pipeline.p22_biotech_ma.ingest.deal_candidates import run as run_deal_candidates
 from src.ml.pipeline.p22_biotech_ma.ingest.deal_coverage import CLASSIFICATIONS, classify, latest_candidates
 from src.ml.pipeline.p22_biotech_ma.ingest.deal_entry import (
@@ -166,6 +167,16 @@ def _cmd_enter(args: argparse.Namespace) -> int:
         result = record_deal(uow.p22, item, entry, entered_by=args.reviewer, acknowledge_flags=args.ack_flags)
     _logger.info("Recorded deal_id=%s from item %s", result["deal_id"], args.item_id)
     _logger.info("%s", _format_context(result["context"]))
+    return 0
+
+
+def _cmd_add_candidate(args: argparse.Namespace) -> int:
+    with DatabaseService().uow() as uow:
+        item_id = add_manual_candidate(
+            uow.p22, cik=args.cik, evidence_url=args.url, form_type=args.form, filed_date=args.filed,
+            accession_no=args.accession, note=args.note,
+        )
+    _logger.info("Queued deal candidate item %s — label it with enter/link/reject", item_id)
     return 0
 
 
@@ -469,6 +480,17 @@ def build_parser() -> argparse.ArgumentParser:
                        help="Enter a strategic_acquisition even though reverse-merger heuristics fired")
     enter.set_defaults(func=_cmd_enter)
 
+    add_candidate = sub.add_parser(
+        "add-candidate", help="Queue a deal candidate the scan cannot see (acquirer-only filings, schemes)"
+    )
+    add_candidate.add_argument("--cik", required=True, help="the TARGET company's CIK (must be in p22_company)")
+    add_candidate.add_argument("--url", required=True, help="filing document URL on sec.gov (any filer)")
+    add_candidate.add_argument("--form", required=True, help="form type, e.g. S-4, 8-K, DEFM14A")
+    add_candidate.add_argument("--filed", required=True, help="filing date YYYY-MM-DD")
+    add_candidate.add_argument("--accession", help="defaults to the accession in --url")
+    add_candidate.add_argument("--note")
+    add_candidate.set_defaults(func=_cmd_add_candidate)
+
     amend = sub.add_parser("amend", help="Correct an entered deal; premiums and review flags are re-derived")
     amend.add_argument("deal_id", type=int, help="p22_deal.deal_id (or the review item id with --by-item)")
     amend.add_argument("--by-item", dest="by_item", action="store_true", help="deal_id is the review item the deal came from")
@@ -535,7 +557,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return int(args.func(args))
-    except DealEntryError as exc:
+    except (DealEntryError, ManualCandidateError) as exc:
         _logger.error("Deal entry failed: %s", exc)
         return 1
 

@@ -883,6 +883,14 @@ use in the code/config; this section exists so they're all in one place to walk 
   not attributed (MacroGenics/ImmunoGen, Akari/Celsus); GENETIC-type interventions (gene therapy)
   are not asset candidates; the raw zone names payloads by content hash, so two companies with
   byte-identical hit lists share one manifest.
+- **ADDED 2026-11-07: coverage gaps → DEFM14C scan + `add-candidate`.** `coverage` after the first import
+  (802 vanished companies: 377 with a deal, 61 candidates-all-rejected, 364 no candidate) showed three gaps:
+  (1) cluster-level rejects swallowed real takeovers that sat in the same <365-day prefill cluster as a
+  debt-exchange/redomicile S-4 (Genzyme/Sanofi, Salix/Valeant, Ambrx/J&J, Valeant/Biovail) — re-entered via
+  `results/p22_biotech_ma/deals_fix_2026_11_07.csv`; (2) written-consent deals file DEFM14C, which the scan
+  did not query (PPD/Thermo Fisher) — added to `_DEAL_FORMS`, needs a `scan --start 2010-01-01` rerun;
+  (3) deals where only the acquirer filed, or foreign schemes (Zyla, Cyclo, Innovus, Talon, Shire) — queued
+  by hand with `add-candidate` (`deal_candidates.add_manual_candidate`, payload `source: manual`).
 - **ADDED 2026-11-07: `deal_entry_cli amend` + first full label import.** The reviewed prefill CSV was
   imported on prod 2026-11-07 (532 deals, 1,290 links, 877 rejects). Corrections after import go through
   `amend DEAL_ID [--by-item] --reviewer R --<field> VALUE` (`ingest/deal_entry.py::amend_deal`): the stored

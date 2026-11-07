@@ -35,23 +35,115 @@ exactly the kind of judgment spec routes to hand-verification.
 
 from __future__ import annotations
 
+import re
 import sys
+from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.ml.pipeline.p22_biotech_ma.ingest.activist_positions import parse_source_url
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
-_DEAL_FORMS = ("SC 14D9", "DEFM14A", "S-4")
+# DEFM14C added 2026-11-07: deals approved by written consent of a majority holder (PPD/Thermo Fisher 2021)
+# file an information statement instead of a proxy, and the 2010-2026 backfill missed every one of them.
+_DEAL_FORMS = ("SC 14D9", "DEFM14A", "DEFM14C", "S-4")
+_ACCESSION_PATTERN = re.compile(r"^(\d{10})-?(\d{2})-?(\d{6})$")
+
+
+class ManualCandidateError(ValueError):
+    """A hand-added deal candidate cannot be queued (unknown company, bad accession, duplicate)."""
+
+
+def _normalize_accession(accession: str) -> str:
+    m = _ACCESSION_PATTERN.match((accession or "").strip())
+    if not m:
+        raise ManualCandidateError(f"Not an EDGAR accession number: {accession!r}")
+    return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+
+
+def add_manual_candidate(
+    repo: Any,
+    *,
+    cik: str,
+    evidence_url: str,
+    form_type: str,
+    filed_date: str,
+    accession_no: Optional[str] = None,
+    note: Optional[str] = None,
+) -> int:
+    """
+    Queue a `deal_candidate` the EFTS scan cannot find, typed in by hand from a filing URL.
+
+    The scan only sees filings that list the universe company's own CIK. Deals where only the acquirer
+    filed (its S-4 does not name the target as a filer: Assertio/Zyla, Rafael/Cyclo) and foreign schemes
+    of arrangement are invisible to it; `deal_entry_cli coverage` lists such companies, and this queues
+    one of them so the normal `enter`/`link`/`reject` flow can label it.
+
+    Args:
+        repo: A `P22Repo`-shaped object.
+        cik: The TARGET company's CIK (it must be in `p22_company`); the URL may be any filer's.
+        evidence_url: The filing document on sec.gov (`.../Archives/edgar/data/{cik}/{accession}/{file}`).
+        form_type: The filing's form, e.g. `"S-4"`, `"8-K"`.
+        filed_date: `"YYYY-MM-DD"`.
+        accession_no: Defaults to the accession in `evidence_url`.
+        note: Why the candidate was added by hand.
+
+    Returns:
+        The new review `item_id`.
+
+    Raises:
+        ManualCandidateError: unknown company, unparseable accession/date, or the same (company,
+            filing) is already queued in any status.
+    """
+    company = repo.get_company_by_cik(cik)
+    if company is None:
+        raise ManualCandidateError(f"CIK {cik} is not a P22 universe company")
+    if accession_no is None:
+        parsed = parse_source_url(evidence_url)
+        if parsed is None:
+            raise ManualCandidateError(f"Cannot read an accession from {evidence_url!r}; pass it explicitly")
+        accession_no = parsed[1]
+    accession = _normalize_accession(accession_no)
+    try:
+        date.fromisoformat(filed_date)
+    except ValueError as exc:
+        raise ManualCandidateError(f"filed_date must be YYYY-MM-DD, got {filed_date!r}") from exc
+
+    company_id = int(company["company_id"])
+    for item in repo.get_review_items(item_type="deal_candidate"):
+        payload = item.get("payload") or {}
+        if payload.get("company_id") == company_id and payload.get("accession_no") == accession:
+            raise ManualCandidateError(f"Already queued as item {item['item_id']} ({item['status']})")
+
+    item_id = repo.add_review_item(
+        item_type="deal_candidate",
+        payload={
+            "reason": "deal_candidate",
+            "company_id": company_id,
+            "cik": company.get("cik") or cik,
+            "form_type": form_type,
+            "accession_no": accession,
+            "filed_date": filed_date,
+            "all_ciks_in_filing": [],
+            "all_names_in_filing": [],
+            "source": "manual",
+            "manual_note": note,
+        },
+        evidence_url=evidence_url,
+        priority=0,
+    )
+    _logger.info("Queued manual deal candidate %s: company %s, %s %s", item_id, company_id, form_type, accession)
+    return int(item_id)
 
 
 def run(repo: Any, edgar: Any, start_dt: str, end_dt: str) -> Dict[str, Any]:
     """
-    Scan `[start_dt, end_dt]` for SC 14D9/DEFM14A/S-4 filings involving any P22 universe company
+    Scan `[start_dt, end_dt]` for SC 14D9/DEFM14A/DEFM14C/S-4 filings involving any P22 universe company
     and queue a `deal_candidate` review item for each (company, filing) pair not already pending.
 
     Args:

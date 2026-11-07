@@ -8,7 +8,9 @@ from unittest.mock import MagicMock
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.ml.pipeline.p22_biotech_ma.ingest.deal_candidates import run
+import pytest
+
+from src.ml.pipeline.p22_biotech_ma.ingest.deal_candidates import ManualCandidateError, add_manual_candidate, run
 
 
 def _hit(ciks, form, adsh, doc="primary_doc.htm", names=None):
@@ -109,3 +111,59 @@ def test_run_no_matches_at_all():
     summary = run(repo, edgar, start_dt="2026-08-01", end_dt="2026-09-01")
 
     assert summary == {"filings_matched": 0, "candidates_queued": 0, "already_queued": 0}
+
+
+def test_run_scans_defm14c_information_statements():
+    """Written-consent deals (PPD/Thermo Fisher 2021) only file a DEFM14C."""
+    repo = MagicMock()
+    repo.list_companies_full.return_value = [{"company_id": 7, "cik": "0000000001"}]
+    repo.get_review_items.return_value = []
+    edgar = MagicMock()
+    edgar.efts_filings_search.side_effect = lambda ciks, forms, start_dt, end_dt: (
+        [_hit(["0000000001"], "DEFM14C", "0001-21-000009")] if forms == "DEFM14C" else []
+    )
+
+    summary = run(repo, edgar, "2021-01-01", "2021-12-31")
+
+    assert "DEFM14C" in [c.kwargs["forms"] for c in edgar.efts_filings_search.call_args_list]
+    assert summary["candidates_queued"] == 1
+    assert repo.add_review_item.call_args.kwargs["payload"]["form_type"] == "DEFM14C"
+
+
+def _manual_repo(existing=None):
+    repo = MagicMock()
+    repo.get_company_by_cik.side_effect = lambda cik: {"company_id": 7, "cik": "0001586105"} if cik.lstrip("0") == "1586105" else None
+    repo.get_review_items.return_value = existing or []
+    repo.add_review_item.return_value = 501
+    return repo
+
+
+_URL = "https://www.sec.gov/Archives/edgar/data/1808665/000119312520071234/d12345ds4.htm"
+
+
+def test_add_manual_candidate_queues_target_with_accession_from_acquirer_url():
+    repo = _manual_repo()
+    item_id = add_manual_candidate(repo, cik="1586105", evidence_url=_URL, form_type="S-4", filed_date="2020-03-16",
+                                   note="Assertio S-4 does not list Zyla")
+    assert item_id == 501
+    kwargs = repo.add_review_item.call_args.kwargs
+    assert kwargs["item_type"] == "deal_candidate"
+    assert kwargs["evidence_url"] == _URL
+    payload = kwargs["payload"]
+    assert payload["company_id"] == 7
+    assert payload["accession_no"] == "0001193125-20-071234"
+    assert payload["form_type"] == "S-4" and payload["filed_date"] == "2020-03-16"
+    assert payload["source"] == "manual" and payload["manual_note"] == "Assertio S-4 does not list Zyla"
+
+
+def test_add_manual_candidate_refuses_unknown_company_bad_input_and_duplicates():
+    with pytest.raises(ManualCandidateError, match="not a P22 universe company"):
+        add_manual_candidate(_manual_repo(), cik="999", evidence_url=_URL, form_type="S-4", filed_date="2020-03-16")
+    with pytest.raises(ManualCandidateError, match="accession"):
+        add_manual_candidate(_manual_repo(), cik="1586105", evidence_url="https://example.com/x", form_type="S-4",
+                             filed_date="2020-03-16")
+    with pytest.raises(ManualCandidateError, match="YYYY-MM-DD"):
+        add_manual_candidate(_manual_repo(), cik="1586105", evidence_url=_URL, form_type="S-4", filed_date="16/03/2020")
+    existing = [{"item_id": 42, "status": "rejected", "payload": {"company_id": 7, "accession_no": "0001193125-20-071234"}}]
+    with pytest.raises(ManualCandidateError, match="item 42"):
+        add_manual_candidate(_manual_repo(existing), cik="1586105", evidence_url=_URL, form_type="S-4", filed_date="2020-03-16")
