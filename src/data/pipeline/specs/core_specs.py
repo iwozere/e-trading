@@ -37,6 +37,7 @@ SPECS: List[PluginSpec] = [
         cron="35 9 * * 1-5",
         script_path="src/ml/pipeline/p06_emps2/run_emps2_scan.py",
         timeout_seconds=14400,
+        enabled=False,  # disabled 2026-11-07: no edge vs VT in the signal ledger (Dec 2025 - Nov 2026)
         extra_task_params={
             "notification_rules": {"conditions": [
                 {"check_field": "phase1_count", "operator": ">", "threshold": 0, "channels": ["email"],
@@ -52,6 +53,7 @@ SPECS: List[PluginSpec] = [
         cron="0 14 * * 1-5",
         script_path="src/ml/pipeline/p06_emps2/run_emps2_scan.py",
         timeout_seconds=14400,
+        enabled=False,  # disabled 2026-11-07: no edge vs VT in the signal ledger (Dec 2025 - Nov 2026)
         extra_task_params={
             "notification_rules": {"conditions": [
                 {"check_field": "phase1_count", "operator": ">", "threshold": 0, "channels": ["email"],
@@ -69,6 +71,7 @@ SPECS: List[PluginSpec] = [
         cron="0 7 * * *",
         script_path="src/ml/pipeline/p06_emps2/trf_downloader.py",
         timeout_seconds=1800,
+        enabled=False,  # disabled 2026-11-07: P15 daily bundle step finra_trf gap-fills the same DATA_CACHE_DIR/trf cache
         extra_task_params={
             "notification_rules": {"conditions": [
                 {"check_field": "success", "operator": "==", "threshold": False, "channels": ["email"],

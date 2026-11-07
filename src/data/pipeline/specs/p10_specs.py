@@ -27,6 +27,7 @@ SPECS: List[PluginSpec] = [
         cron="0 7 * * 1-6",
         script_path="src/ml/pipeline/p10_emps3/run_emps3_scan.py",
         timeout_seconds=14400,
+        enabled=False,  # disabled 2026-11-07: no edge vs VT in the signal ledger (Jun - Nov 2026)
         extra_task_params={"notification_rules": _NOTIFICATION_RULES},
     ),
     PluginSpec(
@@ -35,6 +36,7 @@ SPECS: List[PluginSpec] = [
         cron="0 18 * * 1-5",
         script_path="src/ml/pipeline/p10_emps3/run_emps3_scan.py",
         timeout_seconds=14400,
+        enabled=False,  # disabled 2026-11-07: no edge vs VT in the signal ledger (Jun - Nov 2026)
         extra_task_params={"notification_rules": _NOTIFICATION_RULES},
     ),
 ]
