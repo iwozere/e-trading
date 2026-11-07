@@ -42,11 +42,37 @@ class SignalLedgerService(BaseDBService):
         return self.repos.signal_ledger.list_signals(source=source, since=since, limit=limit, newest_first=newest_first)
 
     @with_uow
-    def replace_book_nav(self, source: str, rows: Sequence[Dict[str, Any]]) -> int:
-        """Replace one stream's paper-book NAV history; returns the row count."""
-        return self.repos.signal_ledger.replace_book_nav(source, rows)
+    def replace_book_nav(self, source: str, rows: Sequence[Dict[str, Any]], policy: str = "horizon") -> int:
+        """Replace one stream/policy paper-book NAV history; returns the row count."""
+        return self.repos.signal_ledger.replace_book_nav(source, rows, policy)
 
     @with_uow
-    def get_book_nav(self, source: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_book_nav(self, source: Optional[str] = None, policy: Optional[str] = None) -> List[Dict[str, Any]]:
         """Return paper-book NAV rows, oldest first."""
-        return self.repos.signal_ledger.get_book_nav(source)
+        return self.repos.signal_ledger.get_book_nav(source, policy)
+
+    @with_uow
+    def replace_book_trades(self, source: str, policy: str, trades: Sequence[Dict[str, Any]]) -> int:
+        """Replace one stream/policy book's paper trades; returns the row count."""
+        return self.repos.signal_ledger.replace_book_trades(source, policy, trades)
+
+    @with_uow
+    def replace_book_stats(self, source: str, stats_by_policy: Dict[str, Dict[str, Any]]) -> int:
+        """Replace one stream's per-policy summaries; returns the row count."""
+        return self.repos.signal_ledger.replace_book_stats(source, stats_by_policy)
+
+    @with_uow
+    def get_book_stats(self, source: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Return per-stream/policy summaries."""
+        return self.repos.signal_ledger.get_book_stats(source)
+
+    @with_uow
+    def get_book_trades(
+        self,
+        source: Optional[str] = None,
+        policy: Optional[str] = None,
+        open_only: bool = False,
+        limit: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """Return paper trades, newest entry first (see SignalLedgerRepo.get_book_trades)."""
+        return self.repos.signal_ledger.get_book_trades(source=source, policy=policy, open_only=open_only, limit=limit)

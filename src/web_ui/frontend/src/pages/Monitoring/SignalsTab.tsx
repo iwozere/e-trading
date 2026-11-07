@@ -87,7 +87,7 @@ interface SignalRow {
   [key: string]: unknown;
 }
 
-const HORIZONS = [1, 5, 10, 20];
+const HORIZONS = [1, 5, 10, 20, 60, 120, 250];
 const BENCHMARKS = ['vt', 'spy', 'iwm'];
 
 const VERDICT_CHIP: Record<HorizonStats['verdict'], { label: string; color: 'success' | 'error' | 'default' | 'warning' }> = {

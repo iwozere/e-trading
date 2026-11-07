@@ -114,8 +114,30 @@ def test_harvest_p22_emits_only_tier_entries(tmp_path: Path) -> None:
     ]
     first = records[0]
     assert (first.source, first.rank, first.score, first.horizon_days) == ("p22_tier_entry", 1, 3.5, 250)
-    assert first.meta == {"tier": 3, "tier_reason": "disclosed_sale_process"}
-    assert [r.ticker for r in harvest_p22(tmp_path, since=date(2026, 11, 6))] == ["BBB", "AAA"]
+    # AAA's first spell ends on the 11-07 watchlist (dropped to tier 0): that is its native exit signal.
+    assert first.meta == {"tier": 3, "tier_reason": "disclosed_sale_process", "exit_signal_date": "2026-11-07"}
+    assert records[1].meta["exit_signal_date"] == "2026-11-08"  # BBB is missing from the 11-08 watchlist
+    assert "exit_signal_date" not in records[2].meta  # AAA's second spell is still open
+    # Exit dates arrive long after the entry, so the whole archive is always re-emitted.
+    assert len(harvest_p22(tmp_path, since=date(2026, 11, 8))) == 3
+
+
+def test_harvest_p24_attaches_the_paper_exit_signal(tmp_path: Path) -> None:
+    from src.ml.pipeline.signal_ledger.harvesters import harvest_p24
+
+    base = tmp_path / "p24_falling_knife"
+    _write(base / "2026-11-02/signals_daily.csv",
+           "timeframe,ticker,signal_date,close,drop_pct,score\ndaily,KNF,2026-10-30,5,0.6,0.9\ndaily,OPN,2026-10-30,5,0.6,0.5\n")
+    _write(base / "_state/paper_positions.json", json.dumps({"positions": [
+        {"timeframe": "daily", "ticker": "KNF", "signal_date": "2026-10-30", "exit_signal_date": "2026-11-20"},
+        {"timeframe": "daily", "ticker": "OPN", "signal_date": "2026-10-30", "exit_signal_date": None},
+        {"timeframe": "weekly", "ticker": "KNF", "signal_date": "2026-10-30", "exit_signal_date": "2027-01-01"},
+    ]}))
+
+    records = {r.ticker: r for r in harvest_p24(tmp_path, since=date(2026, 11, 5))}
+
+    assert records["KNF"].meta["exit_signal_date"] == "2026-11-20"
+    assert "exit_signal_date" not in records["OPN"].meta
 
 
 def test_harvest_p24_reads_both_timeframes_and_skips_suspect(tmp_path: Path) -> None:

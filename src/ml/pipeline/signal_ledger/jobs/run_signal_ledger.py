@@ -4,11 +4,14 @@ Signal Ledger — nightly job: harvest signals, refresh prices, score, rebuild p
 Steps:
 1. Harvest pick files of the last ``RECENT_HARVEST_DAYS`` (``--full``: whole archive = backfill)
    and upsert them into ``signal_ledger``.
-2. Refresh the price cache for every ticker with a pending signal (whole history from
-   its earliest signal, so a ticker's prices always come from one fetch) plus benchmarks.
+2. Refresh the OHLC price cache for every ticker with a pending signal or a signal in the
+   last ``ACTIVE_PRICE_DAYS`` (whole history from its earliest signal, so a ticker's prices
+   always come from one fetch) plus benchmarks.
 3. Evaluate pending signals and write their outcomes.
-4. Rebuild each stream's simulated paper book into ``signal_book_nav``.
-5. Write ``scorecard.json`` to ``results/signal_ledger/YYYY-MM-DD/``.
+4. Rebuild each stream's simulated paper book under every exit policy (``exits.py``) into
+   ``signal_book_nav`` and ``signal_book_trades``.
+5. Write ``scorecard.json`` (scorecard, default-policy books, per-policy book and trade stats)
+   to ``results/signal_ledger/YYYY-MM-DD/``.
 
 Usage:
     python src/ml/pipeline/signal_ledger/jobs/run_signal_ledger.py [--full]
@@ -27,10 +30,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.services.signal_ledger_service import SignalLedgerService
-from src.ml.pipeline.signal_ledger.config import BENCHMARKS, RECENT_HARVEST_DAYS, RESULTS_DIR, RESULTS_ROOT
+from src.ml.pipeline.signal_ledger.config import ACTIVE_PRICE_DAYS, BENCHMARKS, RECENT_HARVEST_DAYS, RESULTS_DIR, RESULTS_ROOT
 from src.ml.pipeline.signal_ledger.evaluator import STATUS_COMPLETE, STATUS_NO_DATA, evaluate_signals
 from src.ml.pipeline.signal_ledger.harvesters import harvest_all
-from src.ml.pipeline.signal_ledger.portfolio import simulate_book, summarize_book
+from src.ml.pipeline.signal_ledger.exits import DEFAULT_POLICY, policies_for
+from src.ml.pipeline.signal_ledger.portfolio import simulate_book, simulate_uncapped, summarize_book, summarize_trades
 from src.ml.pipeline.signal_ledger.prices import PriceCache
 from src.ml.pipeline.signal_ledger.scorecard import build_scorecard
 from src.notification.logger import setup_logger
@@ -73,18 +77,21 @@ def run(
     _logger.info("Harvested %d signals (%d new) since %s", len(records), inserted, since or "the beginning")
 
     pending = db.get_pending_signals()
-    refreshed = _refresh_prices(prices, pending, today)
+    active = db.list_signals(since=today - timedelta(days=ACTIVE_PRICE_DAYS))
+    refreshed = _refresh_prices(prices, [*pending, *active], today)
 
-    opens, closes = prices.panel("open", before=today), prices.panel("close", before=today)
-    outcomes = evaluate_signals(pending, opens, closes, today) if len(closes.index) else []
+    panels = {field: prices.panel(field, before=today) for field in ("open", "high", "low", "close")}
+    opens, closes = panels["open"], panels["close"]
+    outcomes = evaluate_signals(pending, opens, closes, today, panels["high"], panels["low"]) if len(closes.index) else []
     db.update_outcomes(outcomes)
     completed = sum(1 for o in outcomes if o["status"] == STATUS_COMPLETE)
     no_data = sum(1 for o in outcomes if o["status"] == STATUS_NO_DATA)
 
     rows = db.list_signals()
-    books = _rebuild_books(db, rows, opens, closes)
+    policies = _rebuild_books(db, rows, panels)
+    books = {source: by_policy[DEFAULT_POLICY.name]["book"] for source, by_policy in policies.items()}
     scorecard = build_scorecard(rows)
-    _write_scorecard(results_dir / today.isoformat(), scorecard, books)
+    _write_scorecard(results_dir / today.isoformat(), scorecard, books, policies)
 
     result = {
         "date": today.isoformat(),
@@ -95,24 +102,25 @@ def run(
         "no_data": no_data,
         "prices_refreshed": refreshed,
         "streams": len(scorecard),
+        "books_simulated": sum(len(by_policy) for by_policy in policies.values()),
         "edge_streams": sorted({s["stream"] for s in scorecard for h in s["horizons"] if h["verdict"] == "edge"}),
     }
     _logger.info("Signal ledger run complete: %s", result)
     return result
 
 
-def _refresh_prices(cache: PriceCache, pending: List[Dict[str, Any]], today: date) -> int:
+def _refresh_prices(cache: PriceCache, signals: List[Dict[str, Any]], today: date) -> int:
     """
-    Refresh tickers with pending signals and the benchmarks.
+    Refresh the tickers of the given signals (pending and recent ones) and the benchmarks.
 
     A ticker's columns are replaced as a whole, so its fetch starts at the earlier of
-    its earliest pending signal and its first cached price — completed signals of the
-    same ticker keep the prices the paper book needs.
+    its earliest given signal and its first cached price — older signals of the same
+    ticker keep the prices the paper books need.
     """
-    if not pending:
+    if not signals:
         return 0
     starts: Dict[str, date] = {}
-    for signal in pending:
+    for signal in signals:
         ticker, first = signal["ticker"], signal["signal_date"] - timedelta(days=_PRICE_LEAD_DAYS)
         cached = cache.first_date(ticker)
         starts[ticker] = min(starts.get(ticker, first), first, cached or first)
@@ -130,23 +138,43 @@ def _refresh_prices(cache: PriceCache, pending: List[Dict[str, Any]], today: dat
     return refreshed
 
 
-def _rebuild_books(service: SignalLedgerService, rows: List[Dict[str, Any]], opens: Any, closes: Any) -> Dict[str, Dict[str, Any]]:
-    """Simulate and store every stream's paper book; return the per-source summaries."""
+def _rebuild_books(service: SignalLedgerService, rows: List[Dict[str, Any]], panels: Dict[str, Any]) -> Dict[str, Dict[str, Dict[str, Any]]]:
+    """
+    Simulate and store every stream's paper book under each of its exit policies.
+
+    The capped book (NAV + trades) is stored; the uncapped run only contributes ``all_signals`` stats.
+
+    Returns:
+        ``{source: {policy: {"book": capped book summary, "trades": capped trade stats,
+        "all_signals": uncapped trade stats}}}`` (JSON-safe).
+    """
     by_source: Dict[str, List[Dict[str, Any]]] = {}
     for row in rows:
         by_source.setdefault(row["source"], []).append(row)
-    summaries: Dict[str, Dict[str, Any]] = {}
+    prices = (panels["open"], panels["close"], panels["high"], panels["low"])
+    summaries: Dict[str, Dict[str, Dict[str, Any]]] = {}
     for source, signals in sorted(by_source.items()):
-        nav_rows = simulate_book(source, signals, opens, closes)
-        service.replace_book_nav(source, nav_rows)
-        summaries[source] = summarize_book(nav_rows)
+        for policy in policies_for(source):
+            result = simulate_book(source, signals, *prices, policy=policy)
+            uncapped = simulate_uncapped(source, signals, *prices, policy=policy)
+            service.replace_book_nav(source, result.nav, policy.name)
+            service.replace_book_trades(source, policy.name, result.trades)
+            stats = {"book": summarize_book(result.nav), "trades": summarize_trades(result.trades),
+                     "all_signals": summarize_trades(uncapped.trades)}
+            summaries.setdefault(source, {})[policy.name] = json.loads(json.dumps(stats, default=str))
+        service.replace_book_stats(source, summaries.get(source, {}))
     return summaries
 
 
-def _write_scorecard(day_dir: Path, scorecard: List[Dict[str, Any]], books: Dict[str, Dict[str, Any]]) -> None:
+def _write_scorecard(
+    day_dir: Path,
+    scorecard: List[Dict[str, Any]],
+    books: Dict[str, Dict[str, Any]],
+    policies: Dict[str, Dict[str, Dict[str, Any]]],
+) -> None:
     """Write the dated scorecard snapshot (kept so the scorecard's history can be compared later)."""
     day_dir.mkdir(parents=True, exist_ok=True)
-    payload = {"scorecard": scorecard, "books": books}
+    payload = {"scorecard": scorecard, "books": books, "policies": policies}
     (day_dir / "scorecard.json").write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
 
 

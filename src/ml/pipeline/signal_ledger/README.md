@@ -3,8 +3,8 @@
 ## Overview
 One table of every buy/sell recommendation the active pipelines emitted, with forward returns measured afterwards, so each
 signal stream can be judged on evidence: does it beat VT (where the money sits otherwise), after costs, with statistical
-significance? The nightly job also simulates a paper book per stream with the chosen sizing (USD 2,000 per position, at most
-40 positions, rest in VT).
+significance? The nightly job also simulates paper books per stream with the chosen sizing (USD 2,000 per position, at most
+40 positions, rest in VT), one per exit policy, so exit rules are compared on identical entries.
 
 Pipelines are **not** modified — the ledger harvests the files they already write to `results/<pipeline>/YYYY-MM-DD/`.
 
@@ -12,13 +12,20 @@ Pipelines are **not** modified — the ledger harvests the files they already wr
 - Harvesters for P05 (`top_picks.csv`), P06 (phase-2 alerts, final universe), P10 (PASSED universe), P17 (candidates,
   tier in meta), P19 (T1–T3 momentum alerts from `shadow.sqlite`), P21 (`targets.json`), P22 (`watchlist.csv`, a signal
   only when a ticker enters tiers 1–3; held ~12 months) and P24 (`signals_daily.csv` / `signals_weekly.csv`).
-- Forward returns at 1/5/10/20 sessions: entry at the next session's open, exit at the close; VT/SPY/IWM over the same window.
+- Forward returns at 1/5/10/20/60/120/250 sessions: entry at the next session's open, exit at the close; VT/SPY/IWM over the
+  same window. Per-signal MAE/MFE (lowest low / highest high) over the first 20 sessions.
+- Exit policies (`exits.py`): stream default (`horizon`), `fixed_20/60/120/250`, `bracket` (-15 % stop / +30 % target, 120
+  sessions), `trail_atr` (3 x ATR below the highest close), `native` (P22 tier drop, P24 paper exit, or "no longer signalled"
+  for P05/P06/P10/P17/P21). Each policy runs a **capped book** (realistic 40-position portfolio: NAV + trades with exit reason
+  and MAE/MFE) and an **uncapped run** (every signal traded; the fair basis for comparing exit rules).
 - Scorecard per stream: mean/median excess after a per-stream cost, hit rate, Newey-West t of daily cohorts, verdict
   (`edge`, `negative`, `no_edge`, `insufficient`).
-- Paper book per stream: daily NAV vs 100 % VT, invested share, open positions, max drawdown.
-- Data guard: a 5× one-session price jump inside a holding window (usually an unadjusted reverse split) flags the signal
-  (`data_flag = 'price_jump'`); flagged signals stay in the table but are left out of scorecard and books.
-- Web UI: Monitoring → **Signals** tab (API `GET /api/signals/scorecard`, `/books/{source}/nav`, `/recent`).
+- Paper book per stream and policy: daily NAV vs 100 % VT, invested share, open positions, max drawdown.
+- Data guard: a 5× one-session price jump in the first 20 sessions (usually an unadjusted reverse split) flags the signal
+  (`data_flag = 'price_jump'`); flagged signals stay in the table but are left out of scorecard and books. A later jump only
+  voids the longer horizons, and closes a book position at the last good close (`exit_reason = 'data'`).
+- Web UI: Monitoring → **Signals** tab. API `GET /api/signals/scorecard`, `/books/{source}/nav?policy=`,
+  `/books/{source}/policies` (policy comparison), `/books/{source}/trades?policy=&open_only=`, `/positions?policy=`, `/recent`.
 
 ## Quick Start
 ```bash
@@ -42,14 +49,16 @@ for stream in build_scorecard(rows, benchmark="vt"):
 
 ## Integration
 This module integrates with:
-- `src.data.db` - `signal_ledger` / `signal_book_nav` tables (migration `010_signal_ledger`), `SignalLedgerService`
+- `src.data.db` - `signal_ledger`, `signal_book_nav`, `signal_book_trades`, `signal_book_stats` (migrations `010`, `017`),
+  `SignalLedgerService`
 - `src.data.downloader` - `YahooDataDownloader.get_ohlcv_batch` for adjusted daily bars
 - `src.data.pipeline` - scheduler spec `specs/signal_ledger_specs.py`
 - `src.api` - `signal_ledger_routes.py` serves the scorecard to the Web UI
 
 ## Configuration
 All knobs are in `config.py`: horizons, benchmarks, book sizing (`START_CAPITAL_USD`, `POSITION_USD`, `MAX_POSITIONS`),
-round-trip cost per source (`COST_BPS`), `JUMP_RATIO`, harvest window. State lives in `results/signal_ledger/_state/prices.parquet`;
+round-trip cost per source (`COST_BPS`), `JUMP_RATIO`, harvest window, exit-policy parameters (`BRACKET_*`, `TRAIL_*`,
+`DECAY_SESSIONS`, `META_EXIT_SOURCES`) and `ACTIVE_PRICE_DAYS` (tickers re-fetched nightly). State lives in `results/signal_ledger/_state/prices.parquet`;
 every run writes `results/signal_ledger/YYYY-MM-DD/scorecard.json`.
 
 ## Related Documentation

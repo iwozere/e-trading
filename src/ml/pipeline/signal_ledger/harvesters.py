@@ -244,13 +244,40 @@ def harvest_p21(results_root: Path, since: Optional[date]) -> List[SignalRecord]
 
 # P24 paper positions are held until a CCI exit (median ~47 sessions daily, ~30 weeks weekly).
 _P24_HORIZON_DAYS = {"daily": 40, "weekly": 130}
+_P24_PAPER_STATE = Path("p24_falling_knife") / "_state" / "paper_positions.json"
+
+
+def _p24_paper_exits(results_root: Path) -> Dict[Tuple[str, str, str], str]:
+    """``(timeframe, ticker, signal_date) -> exit_signal_date`` from the P24 paper state (empty if unreadable)."""
+    path = results_root / _P24_PAPER_STATE
+    if not path.exists():
+        return {}
+    try:
+        positions = json.loads(path.read_text(encoding="utf-8")).get("positions", [])
+    except (OSError, json.JSONDecodeError) as exc:
+        _logger.warning("Cannot read P24 paper state %s: %s", path, exc)
+        return {}
+    exits: Dict[Tuple[str, str, str], str] = {}
+    for pos in positions:
+        exit_signal = pos.get("exit_signal_date")
+        if exit_signal:
+            exits[(str(pos.get("timeframe")), str(pos.get("ticker")).upper(), str(pos.get("signal_date")))] = str(exit_signal)
+    return exits
 
 
 def harvest_p24(results_root: Path, since: Optional[date]) -> List[SignalRecord]:
-    """P24 Falling Knife ``signals_<tf>.csv`` (sub-streams ``p24_daily`` / ``p24_weekly``), score-ranked, long only."""
+    """
+    P24 Falling Knife ``signals_<tf>.csv`` (sub-streams ``p24_daily`` / ``p24_weekly``), score-ranked, long only.
+
+    P24's own paper exit (``exit_signal_date`` in its paper state) is attached as ``meta["exit_signal_date"]`` for
+    the ``native`` exit policy. Exits appear weeks after the signal, so the whole (small) archive is always
+    re-emitted and the upsert refreshes the meta; ``since`` is ignored.
+    """
+    del since  # see docstring
+    exits = _p24_paper_exits(results_root)
     records: List[SignalRecord] = []
     for timeframe, horizon in _P24_HORIZON_DAYS.items():
-        for day, path in dated_files(results_root / "p24_falling_knife", f"signals_{timeframe}.csv", since):
+        for day, path in dated_files(results_root / "p24_falling_knife", f"signals_{timeframe}.csv", None):
             df = _read_csv(path)
             if df is None or "ticker" not in df:
                 continue
@@ -262,10 +289,13 @@ def harvest_p24(results_root: Path, since: Optional[date]) -> List[SignalRecord]
                 ticker = clean_ticker(row.get("ticker"))
                 if not ticker:
                     continue
+                meta: Dict[str, Any] = {"drop_pct": _optional_float(row.get("drop_pct")), "close": _optional_float(row.get("close"))}
+                exit_signal = exits.get((timeframe, ticker, str(row.get("signal_date"))))
+                if exit_signal:
+                    meta["exit_signal_date"] = exit_signal
                 records.append(SignalRecord(
                     pipeline="p24", source=f"p24_{timeframe}", signal_date=day, ticker=ticker, rank=position,
-                    score=_optional_float(row.get("score")), horizon_days=horizon,
-                    meta={"drop_pct": _optional_float(row.get("drop_pct")), "close": _optional_float(row.get("close"))},
+                    score=_optional_float(row.get("score")), horizon_days=horizon, meta=meta,
                 ))
     return records
 
@@ -294,25 +324,31 @@ def harvest_p22(results_root: Path, since: Optional[date]) -> List[SignalRecord]
 
     The watchlist is re-published daily with the same names, so only entries are
     signals (new to the tiered set versus the previous readable watchlist, or a
-    re-entry after dropping out). The archive is small, so it is always scanned
-    from the start to know the previous day's set; ``since`` only filters output.
+    re-entry after dropping out). The first watchlist on which the ticker is no
+    longer tiered becomes ``meta["exit_signal_date"]`` (the ``native`` exit).
+    That date appears long after the entry, so the whole (small) archive is always
+    scanned and re-emitted for the upsert to refresh the meta; ``since`` is ignored.
     """
+    del since  # see docstring
     records: List[SignalRecord] = []
+    open_entries: Dict[str, int] = {}  # ticker -> index into records of its current tier spell
     previous: set[str] = set()
     for day, path in dated_files(results_root / "p22_biotech_ma", "watchlist.csv", None):
         tiered = _p22_tiered(path)
         if tiered is None:
             continue
-        if since is None or day >= since:
-            for ticker in sorted(set(tiered) - previous):
-                row = tiered[ticker]
-                rank = _optional_float(row.get("rank_by_composite"))
-                records.append(SignalRecord(
-                    pipeline="p22", source="p22_tier_entry", signal_date=day, ticker=ticker,
-                    rank=int(rank) if rank is not None else None,
-                    score=_optional_float(row.get("composite")), horizon_days=_P22_HORIZON_DAYS,
-                    meta={"tier": int(row["tier"]), "tier_reason": str(row.get("tier_reason", ""))},
-                ))
+        for ticker in sorted(previous - set(tiered)):
+            records[open_entries.pop(ticker)].meta["exit_signal_date"] = day.isoformat()
+        for ticker in sorted(set(tiered) - previous):
+            row = tiered[ticker]
+            rank = _optional_float(row.get("rank_by_composite"))
+            open_entries[ticker] = len(records)
+            records.append(SignalRecord(
+                pipeline="p22", source="p22_tier_entry", signal_date=day, ticker=ticker,
+                rank=int(rank) if rank is not None else None,
+                score=_optional_float(row.get("composite")), horizon_days=_P22_HORIZON_DAYS,
+                meta={"tier": int(row["tier"]), "tier_reason": str(row.get("tier_reason", ""))},
+            ))
         previous = set(tiered)
     return records
 

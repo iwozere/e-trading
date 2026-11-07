@@ -19,7 +19,13 @@ STATE_DIR = RESULTS_DIR / "_state"
 PRICE_CACHE_PATH = STATE_DIR / "prices.parquet"
 
 # Forward-return horizons in trading sessions (entry = next session's open, exit = close h sessions later).
-HORIZONS: Tuple[int, ...] = (1, 5, 10, 20)
+# 60/120/250 serve the slow streams (P22 takeovers, P24 weekly); a signal stays pending until 250 is known.
+HORIZONS: Tuple[int, ...] = (1, 5, 10, 20, 60, 120, 250)
+# Window of the signal-level price-jump flag and of the MAE/MFE columns (a jump later only voids the longer horizons).
+CORE_HORIZON = 20
+# Every ticker with a signal this recent is re-fetched nightly, so book positions held past the
+# signal's own horizons (P22 for ~12 months) keep fresh prices.
+ACTIVE_PRICE_DAYS = 400
 # VT is the "rest of the money" alternative; SPY/IWM give large- and small-cap context.
 BENCHMARKS: Tuple[str, ...] = ("VT", "SPY", "IWM")
 # Ticker whose trading days define the session calendar.
@@ -45,6 +51,28 @@ COST_BPS: Dict[str, float] = {
     # P22 names are small/mid-cap biotechs: wider spreads than large caps.
     "p22_tier_entry": 60.0,
 }
+
+# Exit policies (see exits.py). Native exits of streams that republish their picks: the position is sold at the
+# next open once the ticker has not been re-signalled for this many sessions (P21 rebalances monthly).
+DECAY_SESSIONS: Dict[str, int] = {
+    "p05_top_picks": 5,
+    "p06_phase2_alerts": 5,
+    "p06_final_universe": 5,
+    "p10_final_passed": 5,
+    "p17_candidates": 5,
+    "p21_targets": 25,
+}
+# Streams whose signals carry the pipeline's own exit (``meta["exit_signal_date"]``): P22 tier drop, P24 paper exit.
+META_EXIT_SOURCES: Tuple[str, ...] = ("p22_tier_entry", "p24_daily", "p24_weekly")
+# Longest any policy holds a position (sessions).
+MAX_POLICY_HOLD = 250
+BRACKET_STOP_PCT = 0.15
+BRACKET_TARGET_PCT = 0.30
+BRACKET_MAX_HOLD = 120
+TRAIL_ATR_MULT = 3.0
+ATR_PERIOD = 14
+# Trailing-stop width when no ATR can be computed (fraction of the entry price).
+TRAIL_FALLBACK_PCT = 0.20
 
 # Nightly harvest only rescans recent result folders; --full rescans everything (backfill).
 RECENT_HARVEST_DAYS = 10

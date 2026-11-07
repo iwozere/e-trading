@@ -1,11 +1,13 @@
 """
-Signal Ledger — daily open/close price cache.
+Signal Ledger — daily OHLC price cache.
 
-A wide parquet frame (columns ``(field, ticker)`` with field in ``open``/``close``,
+A wide parquet frame (columns ``(field, ticker)`` with field in ``open``/``high``/``low``/``close``,
 index = session date) under ``results/signal_ledger/_state/``. Prices are
 split/dividend-adjusted, and adjusted history shifts after every new split or
 dividend, so a ticker's columns are always replaced as a whole from one fetch,
-never stitched from two fetches.
+never stitched from two fetches. Caches written before high/low were added
+have no such columns; the first refresh of a ticker fills them, and readers fall
+back to open/close where they are missing.
 """
 
 from __future__ import annotations
@@ -23,7 +25,9 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
-FIELDS = ("open", "close")
+FIELDS = ("open", "high", "low", "close")
+# Bars must carry these; high/low are optional (kept when present).
+_REQUIRED_FIELDS = ("open", "close")
 
 # (tickers, start, end_exclusive) -> {ticker: frame with timestamp/open/close}
 Fetcher = Callable[[List[str], datetime, datetime], Dict[str, pd.DataFrame]]
@@ -45,7 +49,7 @@ def _yahoo_fetcher(tickers: List[str], start: datetime, end: datetime) -> Dict[s
 
 
 class PriceCache:
-    """Wide open/close panel persisted to parquet."""
+    """Wide OHLC panel persisted to parquet."""
 
     def __init__(self, path: Path = PRICE_CACHE_PATH, fetcher: Optional[Fetcher] = None) -> None:
         self.path = path
@@ -138,10 +142,10 @@ class PriceCache:
 
     def panel(self, field: str, before: Optional[date] = None) -> pd.DataFrame:
         """
-        Return one field (``open``/``close``) restricted to trading sessions.
+        Return one field restricted to trading sessions.
 
         Args:
-            field: ``"open"`` or ``"close"``.
+            field: ``"open"``, ``"high"``, ``"low"`` or ``"close"``.
             before: Drop sessions on/after this date.
 
         Returns:
@@ -156,14 +160,15 @@ class PriceCache:
 
 
 def _to_wide(bars: Optional[pd.DataFrame]) -> Optional[pd.DataFrame]:
-    """Turn a downloader frame (timestamp/open/close...) into a date-indexed open/close frame."""
-    if bars is None or bars.empty or not {"timestamp", "open", "close"} <= set(bars.columns):
+    """Turn a downloader frame (timestamp/open/high/low/close...) into a date-indexed OHLC frame."""
+    if bars is None or bars.empty or not {"timestamp", *_REQUIRED_FIELDS} <= set(bars.columns):
         return None
-    frame = bars[["timestamp", *FIELDS]].copy()
+    fields = [f for f in FIELDS if f in bars.columns]
+    frame = bars[["timestamp", *fields]].copy()
     stamps = pd.to_datetime(frame["timestamp"])
     if stamps.dt.tz is not None:
         stamps = stamps.dt.tz_localize(None)
     frame.index = pd.DatetimeIndex(stamps).normalize()
-    frame = frame[list(FIELDS)].apply(pd.to_numeric, errors="coerce").dropna(how="all")
+    frame = frame[fields].apply(pd.to_numeric, errors="coerce").dropna(how="all")
     frame = frame[~frame.index.duplicated(keep="last")]
     return frame if not frame.empty else None
