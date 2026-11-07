@@ -127,6 +127,18 @@ class KestrelService(BaseDBService):
         return self.repos.kestrel.get_past_spinoffs(days_min, days_max)
 
     @with_uow
+    def mark_past_catalysts_passed(self, today: date) -> int:
+        """Move open catalysts dated before ``today`` to state 'passed'. Returns rows changed."""
+        return self.repos.kestrel.mark_past_catalysts_passed(today)
+
+    @with_uow
+    def cancel_superseded_catalysts(
+        self, ticker: str, event_type: str, source: str, window_start: date, window_end: date, keep_dates: List[date]
+    ) -> int:
+        """Cancel open catalysts a source no longer reports inside the window it just refreshed. Returns rows changed."""
+        return self.repos.kestrel.cancel_superseded_catalysts(ticker, event_type, source, window_start, window_end, keep_dates)
+
+    @with_uow
     def stamp_catalyst_alert(self, catalyst_id: int, column: str) -> None:
         """Stamp an alert-time column (t10_alerted_at / t3_alerted_at) to now."""
         self.repos.kestrel.stamp_catalyst_alert(catalyst_id, column)

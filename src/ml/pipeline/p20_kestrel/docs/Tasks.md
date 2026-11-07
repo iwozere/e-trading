@@ -15,6 +15,10 @@
 - [x] `ingest/eod_ingest.py` — EOD OHLCV + technicals → k20_signals
 - [x] `ingest/filings_ingest.py` — Form 4, 8-K, 13D/G → k20_signals + llm_queue
 - [x] `ingest/calendar_sync.py` — Catalyst T-10/T-3 alert countdown
+- [x] `calendar_sync` retires rows each run (2026-11-07): past events → `passed`; Finnhub earnings dates that moved
+  → old row `cancelled` (natural key includes `event_date`, so moves left stale "upcoming" duplicates — 380/863
+  rows were past-dated, 165 tickers had several earnings rows). Repo: `mark_past_catalysts_passed`,
+  `cancel_superseded_catalysts`.
 - [x] `sentiment/alias_builder.py` — Company alias table + legal-name normalization
 - [x] `sentiment/gdelt_processor.py` — GKG z-score pipeline with fuzzy matching
 - [x] `sentiment/social_poll.py` — StockTwits/Reddit/ApeWisdom with rate limiting

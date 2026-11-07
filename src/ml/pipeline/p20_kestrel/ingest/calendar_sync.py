@@ -3,6 +3,7 @@ P20 Kestrel — Catalyst calendar sync.
 
 Pulls earnings dates from Finnhub free tier (no premium), upserts into
 k20_catalysts, fires idempotent T-10/T-3 countdown alerts per §5.1.
+Each run also retires rows: past events -> 'passed', earnings dates Finnhub moved -> 'cancelled'.
 """
 
 from __future__ import annotations
@@ -10,7 +11,7 @@ from __future__ import annotations
 import sys
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -25,12 +26,15 @@ log_alert = _kestrel.log_alert
 stamp_catalyst_alert = _kestrel.stamp_catalyst_alert
 start_job_run = _kestrel.start_job_run
 upsert_catalyst = _kestrel.upsert_catalyst
+mark_past_catalysts_passed = _kestrel.mark_past_catalysts_passed
+cancel_superseded_catalysts = _kestrel.cancel_superseded_catalysts
 from src.ml.pipeline.p20_kestrel.notify import send_push
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
 _JOB_NAME = "catalyst_sync"
+_FINNHUB_HORIZON_DAYS = 90
 
 
 def _fetch_finnhub_earnings(ticker: str, api_key: str) -> List[Dict[str, Any]]:
@@ -52,7 +56,7 @@ def _fetch_finnhub_earnings(ticker: str, api_key: str) -> List[Dict[str, Any]]:
         params = {
             "symbol": ticker,
             "from": today.isoformat(),
-            "to": (today + timedelta(days=90)).isoformat(),
+            "to": (today + timedelta(days=_FINNHUB_HORIZON_DAYS)).isoformat(),
             "token": api_key,
         }
         resp = requests.get(url, params=params, timeout=10)
@@ -152,6 +156,48 @@ def _check_idempotent_countdown(catalyst: Dict[str, Any], today: date, alerts: L
         stamp_catalyst_alert(catalyst["id"], "t3_alerted_at")
 
 
+def _sync_ticker_earnings(ticker: str, api_key: str, target_date: date) -> Tuple[int, int]:
+    """
+    Upsert one ticker's Finnhub earnings dates and cancel rows for dates Finnhub no longer reports.
+
+    The natural key includes ``event_date``, so a moved earnings date inserts a new row; the old row is cancelled
+    here. Nothing is cancelled when Finnhub returns no dates (an empty answer may be a failed fetch).
+
+    Args:
+        ticker: Ticker symbol.
+        api_key: Finnhub API key.
+        target_date: Run date; rows on or after it are (re)opened as 'upcoming'.
+
+    Returns:
+        (rows upserted, rows cancelled).
+    """
+    window_start = date.today()
+    dates: List[date] = []
+    for e in _fetch_finnhub_earnings(ticker, api_key):
+        try:
+            event_date = date.fromisoformat(e.get("date") or "")
+        except ValueError:
+            continue
+        dates.append(event_date)
+        row: Dict[str, Any] = {
+            "ticker": ticker,
+            "event_type": "earnings",
+            "event_date": event_date,
+            "confidence": "confirmed",
+            "source": "finnhub",
+            "notes": f"EPS est: {e.get('epsEstimate')}",
+        }
+        if event_date >= target_date:
+            row["state"] = "upcoming"  # reopen a row cancelled by an earlier move that Finnhub moved back
+        upsert_catalyst(row)
+    if not dates:
+        return 0, 0
+    cancelled = cancel_superseded_catalysts(
+        ticker, "earnings", "finnhub", window_start, window_start + timedelta(days=_FINNHUB_HORIZON_DAYS), dates
+    )
+    return len(dates), cancelled
+
+
 def run(as_of_date: date | None = None) -> Dict[str, Any]:
     """
     Sync the catalyst calendar and fire countdown alerts.
@@ -173,32 +219,21 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
         if not finnhub_key:
             _logger.warning("FINNHUB_API_KEY not set; skipping earnings calendar fetch")
 
+        passed = mark_past_catalysts_passed(target_date)
+        if passed:
+            _logger.info("Marked %d past catalysts as passed", passed)
+
         tickers = get_watchlist_tickers()
         catalysts_upserted = 0
+        catalysts_cancelled = 0
 
         for ticker in tickers:
             if finnhub_key:
-                earnings_list = _fetch_finnhub_earnings(ticker, finnhub_key)
-                for e in earnings_list:
-                    event_date_raw = e.get("date", "")
-                    if not event_date_raw:
-                        continue
-                    try:
-                        event_date = date.fromisoformat(event_date_raw)
-                    except ValueError:
-                        continue
-
-                    upsert_catalyst(
-                        {
-                            "ticker": ticker,
-                            "event_type": "earnings",
-                            "event_date": event_date,
-                            "confidence": "confirmed",
-                            "source": "finnhub",
-                            "notes": f"EPS est: {e.get('epsEstimate')}",
-                        }
-                    )
-                    catalysts_upserted += 1
+                upserted, cancelled = _sync_ticker_earnings(ticker, finnhub_key, target_date)
+                catalysts_upserted += upserted
+                catalysts_cancelled += cancelled
+        if catalysts_cancelled:
+            _logger.info("Cancelled %d earnings rows whose date Finnhub moved", catalysts_cancelled)
 
         # Fire countdown alerts for all upcoming catalysts, combined into one digest
         alerts_fired: List[Dict[str, Any]] = []
@@ -211,6 +246,8 @@ def run(as_of_date: date | None = None) -> Dict[str, Any]:
         summary = {
             "tickers_synced": len(tickers),
             "catalysts_upserted": catalysts_upserted,
+            "catalysts_passed": passed,
+            "catalysts_cancelled": catalysts_cancelled,
             "countdown_checks": len(alerts_fired),
         }
         finish_job_run(_JOB_NAME, target_date, status="ok", rows_out=catalysts_upserted)

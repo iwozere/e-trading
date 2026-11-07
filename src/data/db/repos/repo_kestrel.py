@@ -306,6 +306,49 @@ class KestrelRepo:
         )
         return [{c.key: getattr(r, c.key) for c in K20Catalyst.__table__.columns} for r in rows]
 
+    def mark_past_catalysts_passed(self, today: date) -> int:
+        """Move open catalysts (upcoming / date_changed) dated before ``today`` to state 'passed'. Returns rows changed."""
+        result = self.session.execute(
+            update(K20Catalyst)
+            .where(K20Catalyst.event_date < today, K20Catalyst.state.in_(["upcoming", "date_changed"]))
+            .values(state="passed")
+        )
+        return int(getattr(result, "rowcount", 0) or 0)
+
+    def cancel_superseded_catalysts(
+        self, ticker: str, event_type: str, source: str, window_start: date, window_end: date, keep_dates: List[date]
+    ) -> int:
+        """
+        Cancel open catalysts a source no longer reports inside the window it just refreshed.
+
+        Used when a provider moves an event (e.g. Finnhub shifts an earnings date): the natural key includes
+        ``event_date`` so the new date inserts a new row, and the old row would otherwise stay 'upcoming'.
+
+        Args:
+            ticker: Ticker symbol.
+            event_type: Event type (e.g. 'earnings').
+            source: Provider that produced the rows (only its rows are touched).
+            window_start: First date the provider was asked about (inclusive).
+            window_end: Last date the provider was asked about (inclusive).
+            keep_dates: Event dates the provider returned in this refresh.
+
+        Returns:
+            Number of rows cancelled.
+        """
+        result = self.session.execute(
+            update(K20Catalyst)
+            .where(
+                K20Catalyst.ticker == ticker,
+                K20Catalyst.event_type == event_type,
+                K20Catalyst.source == source,
+                K20Catalyst.event_date.between(window_start, window_end),
+                K20Catalyst.event_date.notin_(keep_dates),
+                K20Catalyst.state.in_(["upcoming", "date_changed"]),
+            )
+            .values(state="cancelled")
+        )
+        return int(getattr(result, "rowcount", 0) or 0)
+
     def stamp_catalyst_alert(self, catalyst_id: int, column: str) -> None:
         """Stamp an alert-time column (t10_alerted_at / t3_alerted_at) to now."""
         allowed = {"t10_alerted_at", "t3_alerted_at", "datechange_alerted_at"}

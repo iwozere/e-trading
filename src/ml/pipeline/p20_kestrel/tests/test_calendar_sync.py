@@ -16,6 +16,7 @@ def run_env(monkeypatch):
     monkeypatch.setattr(calendar_sync, "finish_job_run", lambda *_a, **_kw: None)
     monkeypatch.setattr(calendar_sync, "get_watchlist_tickers", lambda: [])
     monkeypatch.setattr(calendar_sync, "log_alert", lambda **_kw: None)
+    monkeypatch.setattr(calendar_sync, "mark_past_catalysts_passed", lambda _today: 0)
 
     stamped: list[tuple] = []
     monkeypatch.setattr(calendar_sync, "stamp_catalyst_alert", lambda cid, col: stamped.append((cid, col)))
@@ -84,3 +85,44 @@ def test_no_digest_sent_when_nothing_fires(monkeypatch, run_env):
 
     assert result["countdown_checks"] == 0
     assert sent == []
+
+
+# ── Retiring past and moved catalysts ─────────────────────────────────────────
+
+
+def test_run_marks_past_catalysts_passed(monkeypatch, run_env):
+    seen: list = []
+    monkeypatch.setattr(calendar_sync, "mark_past_catalysts_passed", lambda today: seen.append(today) or 7)
+    monkeypatch.setattr(calendar_sync, "get_all_upcoming_catalysts", lambda days_ahead: [])
+    assert run(as_of_date=_TODAY)["catalysts_passed"] == 7
+    assert seen == [_TODAY]
+
+
+def test_sync_ticker_cancels_moved_earnings_dates(monkeypatch):
+    upserts: list = []
+    cancels: list = []
+    monkeypatch.setattr(calendar_sync, "_fetch_finnhub_earnings",
+                        lambda t, k: [{"date": "2026-11-11", "epsEstimate": 0.1}, {"date": "bad"}, {"date": ""}])
+    monkeypatch.setattr(calendar_sync, "upsert_catalyst", lambda row: upserts.append(row))
+    monkeypatch.setattr(calendar_sync, "cancel_superseded_catalysts", lambda *a: cancels.append(a) or 1)
+
+    assert calendar_sync._sync_ticker_earnings("ADMA", "key", _TODAY) == (1, 1)
+    assert upserts[0]["event_date"] == date(2026, 11, 11) and upserts[0]["state"] == "upcoming"
+    ticker, event_type, source, start, end, keep = cancels[0]
+    assert (ticker, event_type, source, keep) == ("ADMA", "earnings", "finnhub", [date(2026, 11, 11)])
+    assert (end - start).days == 90
+
+
+def test_sync_ticker_never_cancels_on_empty_fetch(monkeypatch):
+    monkeypatch.setattr(calendar_sync, "_fetch_finnhub_earnings", lambda t, k: [])
+    monkeypatch.setattr(calendar_sync, "cancel_superseded_catalysts", lambda *a: pytest.fail("must not cancel"))
+    assert calendar_sync._sync_ticker_earnings("ADMA", "key", _TODAY) == (0, 0)
+
+
+def test_sync_ticker_does_not_reopen_past_dates(monkeypatch):
+    upserts: list = []
+    monkeypatch.setattr(calendar_sync, "_fetch_finnhub_earnings", lambda t, k: [{"date": "2026-10-01"}])
+    monkeypatch.setattr(calendar_sync, "upsert_catalyst", lambda row: upserts.append(row))
+    monkeypatch.setattr(calendar_sync, "cancel_superseded_catalysts", lambda *a: 0)
+    calendar_sync._sync_ticker_earnings("ADMA", "key", _TODAY)
+    assert "state" not in upserts[0]

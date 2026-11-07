@@ -312,9 +312,16 @@ def test_unexpected_status_stops_without_raising(downloader):
 # ------------------------------------------------------------------
 
 
-def test_zefix_request_without_credentials_raises(downloader):
-    with pytest.raises(RuntimeError, match="Zefix credentials not configured"):
-        downloader.search_company("Kardex")
+def test_zefix_request_without_credentials_raises(tmp_path):
+    # Isolate from real ZEFIX_USERNAME / ZEFIX_PASSWORD (env or donotshare) so the test never goes live.
+    with patch.object(SwissDownloader, "_get_config_value", return_value=None):
+        dl = SwissDownloader(cache_dir=tmp_path)
+    with (
+        patch("requests.request") as mock_request,
+        pytest.raises(RuntimeError, match="Zefix credentials not configured"),
+    ):
+        dl.search_company("Kardex")
+    mock_request.assert_not_called()
 
 
 def test_search_company_returns_dataframe(tmp_path):
