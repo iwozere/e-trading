@@ -9,8 +9,8 @@ from typing import List
 import pandas as pd
 
 from src.ml.pipeline.p24_falling_knife.config import DAILY, DAILY_PARAMS, WEEKLY, CostModel, UniverseParams, live_params
-from src.ml.pipeline.p24_falling_knife.jobs.run_p24_scan import default_as_of, session_of
-from src.ml.pipeline.p24_falling_knife.live import filter_universe, is_live_common_stock, prepare_live_daily
+from src.ml.pipeline.p24_falling_knife.jobs.run_p24_scan import default_as_of, is_stale, session_of
+from src.ml.pipeline.p24_falling_knife.live import filter_universe, is_live_common_stock, merge_fresh, prepare_live_daily
 from src.ml.pipeline.p24_falling_knife.notify import compose
 from src.ml.pipeline.p24_falling_knife.paper import (
     CLOSED,
@@ -125,6 +125,20 @@ def test_live_params_apply_frozen_calibration() -> None:
     daily = live_params(DAILY)
     assert (daily.w_narrow, daily.cci_div_min, daily.zz_pct, daily.use_shakeout_rule) == (0.40, 40.0, 0.20, False)
     assert live_params(WEEKLY).use_shakeout_rule is False and live_params(WEEKLY).w_narrow == 0.60
+
+
+def test_merge_fresh_overlays_recent_bars() -> None:
+    cached = pd.DataFrame({"close": [1.0, 2.0, 3.0]}, index=pd.to_datetime(["2026-10-28", "2026-10-29", "2026-10-30"]))
+    fresh = pd.DataFrame({"close": [3.5, 4.0]}, index=pd.to_datetime(["2026-10-30", "2026-11-06"]))
+    merged = merge_fresh({"A": cached, "B": pd.DataFrame()}, {"A": fresh, "C": fresh})
+    assert sorted(merged) == ["A", "C"]
+    assert merged["A"]["close"].tolist() == [1.0, 2.0, 3.5, 4.0]
+
+
+def test_is_stale_allows_holidays_only() -> None:
+    assert not is_stale(date(2026, 11, 6), date(2026, 11, 6))
+    assert not is_stale(date(2026, 4, 2), date(2026, 4, 6))  # Thursday before Good Friday, run Monday
+    assert is_stale(date(2026, 10, 30), date(2026, 11, 6))
 
 
 def test_default_as_of_waits_for_the_close() -> None:

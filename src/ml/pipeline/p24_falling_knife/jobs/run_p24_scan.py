@@ -61,6 +61,9 @@ CALENDAR_SYMBOL = "SPY"
 # Before this UTC time today's US session may still be trading (close 20:00 UTC in EDT, 21:00 UTC in EST).
 SESSION_FINAL_UTC = time(21, 15)
 RESULT_PREFIX = "__SCHEDULER_RESULT__:"
+# A run date can be at most 4 calendar days after the last session: Monday after a Friday holiday (weekly runs on
+# Saturday: 1–2 days). More means the bars did not update.
+MAX_SESSION_LAG_DAYS = 4
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -88,6 +91,20 @@ def default_as_of(now: datetime) -> date:
     """
     utc = now.astimezone(timezone.utc)
     return utc.date() if utc.time() >= SESSION_FINAL_UTC else utc.date() - timedelta(days=1)
+
+
+def is_stale(last_bar: date, as_of: date) -> bool:
+    """
+    True when the calendar symbol's last bar is older than any market closure explains.
+
+    Args:
+        last_bar: Date of the calendar symbol's last daily bar.
+        as_of: Run date.
+
+    Returns:
+        True if more than ``MAX_SESSION_LAG_DAYS`` calendar days lie between them.
+    """
+    return (as_of - last_bar).days > MAX_SESSION_LAG_DAYS
 
 
 def session_of(calendar_daily: pd.DataFrame, timeframe: str, as_of: date) -> date:
@@ -170,6 +187,12 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
     data = fetch_daily(wanted, as_of, live.lookback_days)
     if CALENDAR_SYMBOL not in data:
         return {"ok": False, "error": f"no {CALENDAR_SYMBOL} bars", "timeframe": timeframe}
+    calendar_last = data[CALENDAR_SYMBOL].index[-1].date()
+    if is_stale(calendar_last, as_of):
+        _logger.error("P24 scan: %s bars end %s, run date %s — data is stale, nothing scanned", CALENDAR_SYMBOL,
+                      calendar_last, as_of)
+        return {"ok": False, "error": f"stale data: {CALENDAR_SYMBOL} ends {calendar_last}, run date {as_of}",
+                "timeframe": timeframe}
     session = session_of(data[CALENDAR_SYMBOL], timeframe, as_of)
     run_dir = LIVE_DIR / session.isoformat()
     attach_file_log(run_dir, timeframe)

@@ -25,7 +25,10 @@
 - [x] Owner gate decision 2026-11-06: build Phase 2 as paper + notify only, daily (weekly information only)
 - [x] Phase 2: `live.py`, `scan.py`, `paper.py`, `notify.py`, `jobs/run_p24_scan.py`, `p24_specs.py` (disabled),
   scheduler `--user-id` allowlist, signal-ledger `harvest_p24` + test; SONO 2025-04-23 end-to-end replay (+28.5%)
-- [ ] Deploy to the Pi (`git pull`, `register_jobs`), enable the daily scan, watch the first cold-cache run
+- [x] Deploy to the Pi (`git pull`, `register_jobs`), enable the daily scan (id 117) — 2026-11-06
+- [x] First Pi run 2026-11-06 scanned the stale 2026-10-30 session (cache tolerance); fixed with a forced 10-day
+  refresh + stale-data guard
+- [ ] Verify the next Pi run scans the current session and Telegram/email arrive on a signal day
 
 ### 🚀 PLANNED ENHANCEMENTS
 - [x] M7 Calibration grid code (plateau pick, heatmaps, `calibration_frozen.json`, `--repick`)

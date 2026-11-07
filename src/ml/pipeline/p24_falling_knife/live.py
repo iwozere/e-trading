@@ -110,23 +110,55 @@ def prepare_live_daily(frame: pd.DataFrame) -> pd.DataFrame:
     return bars
 
 
-def fetch_daily(tickers: List[str], session: date, lookback_days: int) -> Dict[str, pd.DataFrame]:
+def merge_fresh(cached: Dict[str, pd.DataFrame], fresh: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
+    """
+    Overlay freshly downloaded recent bars on the cached history (fresh rows win on the same date).
+
+    Args:
+        cached: ``symbol -> bars`` from the cache-first batch.
+        fresh: ``symbol -> bars`` from the forced recent download.
+
+    Returns:
+        ``symbol -> merged bars``, sorted by date, for every symbol in either input.
+    """
+    out: Dict[str, pd.DataFrame] = {}
+    for symbol in dict.fromkeys(list(cached) + list(fresh)):
+        frames = [f for f in (cached.get(symbol), fresh.get(symbol)) if f is not None and not f.empty]
+        if not frames:
+            continue
+        merged = pd.concat(frames) if len(frames) > 1 else frames[0]
+        out[symbol] = merged[~merged.index.duplicated(keep="last")].sort_index()
+    return out
+
+
+def fetch_daily(tickers: List[str], session: date, lookback_days: int, refresh_days: int = 10) -> Dict[str, pd.DataFrame]:
     """
     Fetch daily bars through ``DataManager`` and prepare them.
+
+    ``DataManager`` treats a daily cache as current while it is at most 8 days behind the request (its holiday
+    tolerance), so a cache-first batch alone can return last week's bars. The history therefore comes from the cache
+    and the last ``refresh_days`` calendar days are always downloaded again (``force_refresh``) and overlaid.
 
     Args:
         tickers: Symbols.
         session: Last session to include.
         lookback_days: Calendar days of history.
+        refresh_days: Calendar days re-downloaded on every run.
 
     Returns:
         ``symbol -> P24 daily bars`` for the symbols with data.
     """
     from src.data.data_manager import DataManager
 
+    manager = DataManager()
     start = datetime.combine(session - timedelta(days=lookback_days), time.min)
     end = datetime.combine(session + timedelta(days=1), time.min)
-    raw = DataManager().get_ohlcv_batch(tickers, "1d", start, end)
+    cached = manager.get_ohlcv_batch(tickers, "1d", start, end)
+    recent = datetime.combine(session - timedelta(days=refresh_days), time.min)
+    fresh = manager.get_ohlcv_batch(tickers, "1d", recent, end, force_refresh=True)
+    _logger.info("P24 live data: %d symbols from cache, %d refreshed for the last %d days", len(cached), len(fresh),
+                 refresh_days)
+    raw = merge_fresh(cached, fresh)
     out: Dict[str, pd.DataFrame] = {}
     for symbol, frame in raw.items():
         bars = prepare_live_daily(frame)

@@ -59,6 +59,9 @@ live.py (universe, DataManager bars) ──► scan.py (same detector, last bar)
 - **Coverage proxy.** The vintage cannot say what it is missing; coverage = year's delisting rate / median rate of
   2022–2025 (headline window 2022+, owner decision 2026-11-06).
 
+- **Fresh bars are forced.** `DataManager` treats a daily cache as current while it is ≤ 8 days behind (holiday
+  tolerance), so the first Pi run (2026-11-06) scanned 2026-10-30. `fetch_daily` now takes history from the cache and
+  re-downloads the last 10 days with `force_refresh`; the job fails (`stale data`) if SPY still ends > 4 days back.
 - **Live = backtest code.** The scan calls the same `build_context`/`detect`/`simulate_trade`; only the bar source
   differs. Live bars are split-adjusted, which equals the as-traded price for recent bars, so the price floor and cost
   tier stay correct where they matter (today's bar).

@@ -56,7 +56,9 @@ signals, _ = detect(ctx, DAILY_PARAMS)
 # Full daily scan as the scheduler runs it (it appends --user-id)
 .venv/Scripts/python.exe src/ml/pipeline/p24_falling_knife/jobs/run_p24_scan.py --timeframe daily
 ```
-Without `--date` a run before 21:15 UTC scans the previous session (today's may still be trading). Outputs land in
+Without `--date` a run before 21:15 UTC scans the previous session (today's may still be trading). Every run
+re-downloads the last 10 days of bars (the cache alone may be up to 8 days behind), and a run whose SPY bars end more
+than 4 days before the run date fails with `stale data` instead of scanning an old session. Outputs land in
 `results/p24_falling_knife/YYYY-MM-DD/` (folder date = signal date): `signals_<tf>.csv`, `forming_<tf>.csv`,
 `paper_positions_<tf>.csv`, `paper_exits_<tf>.csv`, `charts/*.png`, `run_summary_<tf>.json`, `pipeline_<tf>.log`.
 Paper state: `results/p24_falling_knife/_state/paper_positions.json`.
