@@ -43,15 +43,24 @@ _US_STATE_OR_TERRITORY_CODES = frozenset({
 })
 
 
+# "2Q" is SEC's code for the country Georgia. Filers in the US state pick it by mistake: Biota/Vaxart
+# (2014-2018) and Clearside (2018-2020) 10-Ks read "Alpharetta, 2Q". No universe company is based in the
+# country, so the code is read as the state.
+_MISCODED_US_STATES = frozenset({"2Q"})
+
+
 def extract_is_foreign_domiciled(submissions: Dict[str, Any]) -> Optional[bool]:
     """
     Derive `is_foreign_domiciled` from a landed `sec_submissions` payload. `None` if the payload
     has no usable business-address data at all (not the same as a confirmed domestic address).
     """
     business = (submissions.get("addresses") or {}).get("business") or {}
+    state_or_country = (business.get("stateOrCountry") or "").upper()
+    if state_or_country in _MISCODED_US_STATES:
+        # Before isForeignLocation: SEC derives that flag from the same miscoded field.
+        return False
     if business.get("isForeignLocation") == 1:
         return True
-    state_or_country = business.get("stateOrCountry")
     if state_or_country:
-        return state_or_country.upper() not in _US_STATE_OR_TERRITORY_CODES
+        return state_or_country not in _US_STATE_OR_TERRITORY_CODES
     return None

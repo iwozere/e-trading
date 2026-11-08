@@ -41,3 +41,9 @@ def test_extract_is_foreign_domiciled_none_when_no_address_data():
 def test_extract_is_foreign_domiciled_case_insensitive_state_code():
     submissions = {"addresses": {"business": {"stateOrCountry": "de", "isForeignLocation": None}}}
     assert extract_is_foreign_domiciled(submissions) is False
+
+
+def test_extract_is_foreign_domiciled_reads_country_georgia_code_as_us_state():
+    """SEC code 2Q is the country Georgia; Alpharetta filers (Clearside, Biota) chose it for the state."""
+    submissions = {"addresses": {"business": {"stateOrCountry": "2Q", "isForeignLocation": 1}}}
+    assert extract_is_foreign_domiciled(submissions) is False
