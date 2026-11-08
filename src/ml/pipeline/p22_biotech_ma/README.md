@@ -80,6 +80,7 @@ Domicile history for backtests (filing-time business addresses; rerunnable, inse
 
 ```bash
 python -m src.ml.pipeline.p22_biotech_ma.cli.domicile_history_cli --start 2010-01-01 --dry-run
+python -m src.ml.pipeline.p22_biotech_ma.cli.collapse_facts_cli --dry-run   # merge repeated daily domicile rows
 ```
 
 Label coverage, walk-forward backtest (spec §0.3, M6) and the lookahead audit (spec §8.3), all read-only:

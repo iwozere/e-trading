@@ -275,6 +275,25 @@ def test_get_trials_for_company_returns_asset_and_trial_fields(db_session) -> No
     }]
 
 
+def test_collapse_repeated_facts_merges_daily_repeats_keeps_changes(db_session) -> None:
+    repo = P22Repo(db_session)
+    company_id = repo.upsert_company(cik="0000000063", name="Repeat Fact Inc", role="target")
+    for day, value in [(5, 0.0), (6, 0.0), (7, 0.0), (8, 1.0), (9, 1.0)]:
+        repo.upsert_financial_fact_bitemporal(company_id=company_id, metric="is_foreign_domiciled", value=value,
+                                              known_from=datetime(2026, 1, day, tzinfo=timezone.utc), source_id="sec_submissions")
+    repo.upsert_financial_fact_bitemporal(company_id=company_id, metric="is_foreign_domiciled", value=1.0,
+                                          known_from=datetime(2026, 1, 10, tzinfo=timezone.utc), source_id="other")
+
+    assert repo.collapse_repeated_facts(metric="is_foreign_domiciled", source_id="sec_submissions") == 3
+    facts = sorted(repo.get_financial_facts_as_of(company_id, "is_foreign_domiciled", date(2026, 2, 1)), key=lambda f: f["valid_from"])
+    assert [(float(f["value"]), f["valid_from"], f["valid_to"], f["source_id"]) for f in facts] == [
+        (0.0, date(2026, 1, 5), date(2026, 1, 8), "sec_submissions"),
+        (1.0, date(2026, 1, 8), date(2026, 1, 10), "sec_submissions"),
+        (1.0, date(2026, 1, 10), None, "other"),  # other source untouched
+    ]
+    assert repo.collapse_repeated_facts(metric="is_foreign_domiciled", source_id="sec_submissions") == 0
+
+
 def test_get_open_financial_fact_returns_only_the_open_row(db_session) -> None:
     repo = P22Repo(db_session)
     company_id = repo.upsert_company(cik="0000000062", name="Open Fact Inc", role="target")

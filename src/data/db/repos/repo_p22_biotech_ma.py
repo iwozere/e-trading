@@ -305,6 +305,34 @@ class P22Repo:
         self.session.flush()
         return new_row.fact_id
 
+    def collapse_repeated_facts(self, *, metric: str, source_id: str) -> int:
+        """
+        Merge back-to-back rows from one source that repeat the previous row's value: the first row of
+        each run keeps its `known_from` and takes the last row's `valid_to`; the repeats are deleted.
+        Only contiguous rows (`valid_to` of one = `valid_from` of the next) are merged. A repeat adds no
+        information, since the value was already known from the first row, so as-of reads are unchanged.
+
+        Returns:
+            The number of rows deleted.
+        """
+        rows = self.session.execute(
+            select(P22FinancialFact)
+            .where(P22FinancialFact.metric == metric, P22FinancialFact.source_id == source_id)
+            .order_by(P22FinancialFact.company_id, P22FinancialFact.valid_from, P22FinancialFact.fact_id)
+        ).scalars().all()
+        deleted = 0
+        keeper: Optional[P22FinancialFact] = None
+        for row in rows:
+            if (keeper is not None and keeper.company_id == row.company_id and keeper.value == row.value
+                    and keeper.valid_to is not None and keeper.valid_to == row.valid_from):
+                keeper.valid_to = row.valid_to
+                self.session.delete(row)
+                deleted += 1
+                continue
+            keeper = row
+        self.session.flush()
+        return deleted
+
     def insert_financial_fact_history(self, *, company_id: int, metric: str, facts: Sequence[Dict[str, Any]]) -> int:
         """
         Backfill facts known *before* every stored row of `(company_id, metric)` as closed history rows.
