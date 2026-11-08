@@ -883,6 +883,16 @@ use in the code/config; this section exists so they're all in one place to walk 
   not attributed (MacroGenics/ImmunoGen, Akari/Celsus); GENETIC-type interventions (gene therapy)
   are not asset candidates; the raw zone names payloads by content hash, so two companies with
   byte-identical hit lists share one manifest.
+- **ADDED 2026-11-08: Block B trials point-in-time.** Second backtest (Blocks C/E now covered) barely moved:
+  lift@50 1.30, precision@25 0.086, recall@200 1.14×, `naive_informed` still ahead (1.47). Trials are now
+  filtered to those first posted (or started) by `as_of` (migration 018, `start_date`/`first_posted_date`,
+  CT.gov fetch adds `studyFirstPostDateStruct`). Needs on the Pi: `alembic upgrade head`, the CT.gov ingest
+  (for `first_posted_date`), then Trial Normalization, then a backtest rerun. Open: phase and
+  `primary_completion_date` are still current values (catalyst_window sees the realized date).
+  The backtest now also ranks each composite block alone (`block:<name>`) and writes `scores.csv` (one row
+  per target per snapshot: label, block scores, raw features) for offline attribution. Domicile
+  normalization no longer writes a new row when the value matches the open row (it added one per company
+  per weekday).
 - **ADDED 2026-11-08: first full-label backtest + point-in-time Blocks C/E.** After the coverage fixes (16
   more deals from the DEFM14C rescan and 5 hand-added candidates, 552 deals in all) the backtest gave lift@50
   1.31 (target 3.0), precision@25 0.085 (0.12), recall@200 1.20× random (2.0×), and `naive_informed` beat

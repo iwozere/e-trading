@@ -16,7 +16,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import ColumnElement, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -45,6 +45,14 @@ from src.data.db.models.model_p22_biotech_ma import (
 # existing precedent for src/data/db -> src/ml/pipeline references
 # (model_short_squeeze.py), which keeps the DB layer importable on its own
 # and avoids a module-load-order dependency on a specific pipeline package.
+
+
+def _trial_public_by(as_of: date) -> ColumnElement[bool]:
+    """
+    A trial counts as of `as_of` once it was first posted on CT.gov, or started when the posted
+    date is not landed. A trial with neither date is left out.
+    """
+    return func.coalesce(P22Trial.first_posted_date, P22Trial.start_date) <= as_of
 
 
 class P22Repo:
@@ -346,6 +354,17 @@ class P22Repo:
         self.session.flush()
         return len(history)
 
+    def get_open_financial_fact(self, company_id: int, metric: str) -> Optional[Dict[str, Any]]:
+        """The open row (`valid_to IS NULL`) for (company_id, metric), or `None` when there is none."""
+        row = self.session.execute(
+            select(P22FinancialFact).where(
+                P22FinancialFact.company_id == company_id,
+                P22FinancialFact.metric == metric,
+                P22FinancialFact.valid_to.is_(None),
+            )
+        ).scalars().first()
+        return None if row is None else {c.key: getattr(row, c.key) for c in P22FinancialFact.__table__.columns}
+
     def get_financial_facts_as_of(
         self, company_id: int, metric: str, as_of_date: date
     ) -> List[Dict[str, Any]]:
@@ -428,6 +447,8 @@ class P22Repo:
         status: Optional[str] = None,
         enrollment: Optional[int] = None,
         primary_completion_date: Optional[date] = None,
+        start_date: Optional[date] = None,
+        first_posted_date: Optional[date] = None,
         uses_biomarker_selection: Optional[bool] = None,
         is_randomized: Optional[bool] = None,
         has_active_comparator: Optional[bool] = None,
@@ -452,6 +473,8 @@ class P22Repo:
             "status": status,
             "enrollment": enrollment,
             "primary_completion_date": primary_completion_date,
+            "start_date": start_date,
+            "first_posted_date": first_posted_date,
             "uses_biomarker_selection": uses_biomarker_selection,
             "is_randomized": is_randomized,
             "has_active_comparator": has_active_comparator,
@@ -493,7 +516,7 @@ class P22Repo:
             return None
         return {c.key: getattr(row, c.key) for c in P22Trial.__table__.columns}
 
-    def count_phase3_assets_by_therapeutic_area(self, company_id: int) -> Dict[str, int]:
+    def count_phase3_assets_by_therapeutic_area(self, company_id: int, as_of: Optional[date] = None) -> Dict[str, int]:
         """
         Count of DISTINCT `p22_asset` rows for `company_id` with at least one linked `p22_trial`
         whose `phase` includes Phase III, grouped by the asset's `therapeutic_area` (spec §4.1
@@ -510,13 +533,18 @@ class P22Repo:
         intervention trials only (`ingest/trial_normalization.py`); an asset whose only trials are
         multi-intervention and therefore unlinked is invisible here, same known gap as everywhere
         else that reads `p22_asset`.
+
+        With `as_of`, only trials public by then count (`_trial_public_by`).
         """
-        rows = self.session.execute(
+        stmt = (
             select(P22Asset.asset_id, P22Asset.therapeutic_area, P22Trial.phase)
             .join(P22TrialAsset, P22TrialAsset.asset_id == P22Asset.asset_id)
             .join(P22Trial, P22Trial.nct_id == P22TrialAsset.nct_id)
             .where(P22Asset.company_id == company_id)
-        ).all()
+        )
+        if as_of is not None:
+            stmt = stmt.where(_trial_public_by(as_of))
+        rows = self.session.execute(stmt).all()
 
         phase3_asset_ta: Dict[int, str] = {}
         for asset_id, therapeutic_area, phase in rows:
@@ -528,7 +556,7 @@ class P22Repo:
             counts[therapeutic_area] = counts.get(therapeutic_area, 0) + 1
         return counts
 
-    def get_trials_for_company(self, company_id: int) -> List[Dict[str, Any]]:
+    def get_trials_for_company(self, company_id: int, as_of: Optional[date] = None) -> List[Dict[str, Any]]:
         """
         Every `p22_trial` row linked (via `p22_trial_asset`) to any `p22_asset` owned by
         `company_id` — the shared input for Block B's `phase_max`/`asset_count_ph2plus`/
@@ -540,10 +568,14 @@ class P22Repo:
         Same coverage gap as `count_phase3_assets_by_therapeutic_area`: only reaches
         lead-sponsored, single-intervention-trial-linked assets (`docs/Tasks.md` item 8).
 
+        With `as_of`, only trials public by then are returned (`_trial_public_by`). The other
+        columns are still the trial's current state (phase rarely changes; `primary_completion_date`
+        is the latest one, actual once the trial is done).
+
         Returns:
             `[{"nct_id", "asset_id", "asset_name", "therapeutic_area", "phase", "primary_completion_date", "status"}, ...]`.
         """
-        rows = self.session.execute(
+        stmt = (
             select(
                 P22Trial.nct_id,
                 P22TrialAsset.asset_id,
@@ -556,7 +588,10 @@ class P22Repo:
             .join(P22TrialAsset, P22TrialAsset.nct_id == P22Trial.nct_id)
             .join(P22Asset, P22Asset.asset_id == P22TrialAsset.asset_id)
             .where(P22Asset.company_id == company_id)
-        ).all()
+        )
+        if as_of is not None:
+            stmt = stmt.where(_trial_public_by(as_of))
+        rows = self.session.execute(stmt).all()
         return [
             {
                 "nct_id": r.nct_id,

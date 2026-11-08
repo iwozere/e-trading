@@ -54,7 +54,7 @@ class _FakeRepo(MarketCapFixtureMixin):
         del acquirer_id
         return self._patents
 
-    def count_phase3_assets_by_therapeutic_area(self, company_id: int) -> Dict[str, int]:
+    def count_phase3_assets_by_therapeutic_area(self, company_id: int, as_of=None) -> Dict[str, int]:
         del company_id
         return self._phase3_counts
 

@@ -356,6 +356,13 @@ before the earliest stored row by `P22Repo.insert_financial_fact_history` so the
 Block A (`acquirer_pressure_matched`, weight 0.30) stays unknown live and historically: `total_ttm_revenue`
 is never normalized and `p22_patent_expiry` is empty on prod (checked 2026-11-08).
 
+Trials are read as of the snapshot too (migration 018): `get_trials_for_company` and
+`count_phase3_assets_by_therapeutic_area` take `as_of` and keep only trials first posted on CT.gov by then
+(`first_posted_date`; `start_date` until the posted date is landed). Before this every snapshot saw the
+2026 trial list, so a 2016 company already had the Phase 3 programmes it started in 2019. Still current, not
+as of: each trial's phase (rarely changes) and `primary_completion_date` (the realized date, not the estimate
+at the time), which feeds `catalyst_window`.
+
 The universe also drops companies failing the asset floor (spec §2.0.3, `block_b.asset_floor_met`):
 only when every phased trial is EARLY_PHASE1. No linked trial means unknown and the company stays,
 because trial linkage only covers single-intervention trials.

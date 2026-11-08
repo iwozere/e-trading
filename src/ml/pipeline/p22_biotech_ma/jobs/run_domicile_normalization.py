@@ -23,7 +23,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.data.db.services.database_service import DatabaseService
 from src.data.pipeline.dependency_status import deferred_result, require_dependencies_or_defer
 from src.ml.pipeline.p22_biotech_ma.ingest import raw_zone
-from src.ml.pipeline.p22_biotech_ma.ingest.domicile_normalization import METRIC, SOURCE_ID, extract_is_foreign_domiciled
+from src.ml.pipeline.p22_biotech_ma.ingest.domicile_normalization import METRIC, SOURCE_ID, extract_is_foreign_domiciled, is_unchanged
 from src.ml.pipeline.p22_biotech_ma.jobs.run_common import setup_run_logging
 from src.notification.logger import setup_logger
 
@@ -40,10 +40,11 @@ def run() -> dict:
     submissions_by_cik = raw_zone.read_latest_partition_with_manifest("sec_submissions")
     if not submissions_by_cik:
         _logger.warning("No SEC submissions payloads landed yet — run run_sec_ingest.py first")
-        return {"ciks_attempted": 0, "ciks_matched": 0, "facts_written": 0, "unknown": 0}
+        return {"ciks_attempted": 0, "ciks_matched": 0, "facts_written": 0, "unchanged": 0, "unknown": 0}
 
     ciks_matched = 0
     facts_written = 0
+    unchanged = 0
     unknown = 0
 
     db_service = DatabaseService()
@@ -64,10 +65,15 @@ def run() -> dict:
                 unknown += 1
                 continue
 
+            value = 1.0 if is_foreign else 0.0
+            # Same value as the open row: no new row, otherwise every weekday adds one per company.
+            if is_unchanged(uow.p22.get_open_financial_fact(company["company_id"], METRIC), value):
+                unchanged += 1
+                continue
             uow.p22.upsert_financial_fact_bitemporal(
                 company_id=company["company_id"],
                 metric=METRIC,
-                value=1.0 if is_foreign else 0.0,
+                value=value,
                 known_from=datetime.fromisoformat(manifest["known_from"]),
                 source_id=SOURCE_ID,
             )
@@ -75,7 +81,7 @@ def run() -> dict:
 
     summary = {
         "ciks_attempted": len(submissions_by_cik), "ciks_matched": ciks_matched,
-        "facts_written": facts_written, "unknown": unknown,
+        "facts_written": facts_written, "unchanged": unchanged, "unknown": unknown,
     }
     _logger.info("Domicile normalization complete: %s", summary)
     return summary

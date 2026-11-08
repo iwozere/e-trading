@@ -177,6 +177,24 @@ def test_model_ranking_drops_unranked_and_restricts_population():
     assert baselines.model_ranking(rows, {1, 3, 4}) == [4, 1]
 
 
+def test_block_ranking_sorts_by_block_and_friction_ascending():
+    rows = [{"company_id": 1, "subscores": {"blocks": {"strategic_fit": 0.2, "friction_penalty": 1.0}}},
+            {"company_id": 2, "subscores": {"blocks": {"strategic_fit": 0.9, "friction_penalty": 0.0}}},
+            {"company_id": 3, "subscores": {"blocks": {"strategic_fit": None, "friction_penalty": 0.5}}}]
+    assert baselines.block_ranking(rows, "strategic_fit") == [2, 1]  # no score -> left out
+    assert baselines.block_ranking(rows, "friction_penalty") == [2, 3, 1]  # subtracted term: low first
+    assert baselines.block_ranking(rows, "friction_penalty", {1, 3}) == [3, 1]
+
+
+def test_score_rows_flatten_blocks_features_and_labels():
+    rows = [{"company_id": 7, "ticker": "SEVN", "composite": 0.6, "tier": 0,
+             "subscores": {"fundamental": 0.6, "blocks": {"strategic_fit": 0.4}, "features": {"phase_max": 3.0}}}]
+    out = harness.score_rows_for_snapshot(date(2020, 1, 1), rows, {7: {"phase_max": 3.0, "cash_runway_months": 12.0}}, {7}, set())
+    assert out == [{"as_of": date(2020, 1, 1), "company_id": 7, "ticker": "SEVN", "positive": 1, "pe_positive": 0,
+                    "composite": 0.6, "tier": 0, "fundamental": 0.6, "coverage": None, "dilution_gate": None,
+                    "strategic_fit_raw": None, "block_strategic_fit": 0.4, "f_phase_max": 3.0, "f_cash_runway_months": 12.0}]
+
+
 # ---------------------------------------------------------------------
 # harness
 # ---------------------------------------------------------------------
@@ -250,6 +268,9 @@ def test_run_backtest_keeps_later_acquired_inactive_company_and_drops_pending(mo
     naive = next(r for r in result.all_names.as_rows() if r["ranking"] == "naive_informed")
     assert naive["hits"] == 1  # tie on phase/runway -> company_id order puts 1 first
     assert result.return_rows == [{"company_id": 1}]
+    assert [(r["company_id"], r["positive"]) for r in result.score_rows] == [(1, 1), (2, 0)]
+    block_names = {r["ranking"] for r in result.all_names.as_rows()} - {"model", "naive_informed", "catalyst_proximity"}
+    assert block_names == {harness.BLOCK_RANKING_PREFIX + b for b in load_scoring_config().composite}
 
 
 def test_success_criteria_compares_model_to_targets_and_naive():

@@ -48,8 +48,9 @@ def _write_csv(path: Path, rows: Sequence[Dict[str, Any]]) -> None:
     if not rows:
         path.write_text("", encoding="utf-8")
         return
+    fieldnames = list(dict.fromkeys(key for row in rows for key in row))  # union, first-seen order
     with path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
 
@@ -84,7 +85,7 @@ def success_criteria(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
 def _log_table(title: str, rows: Sequence[Dict[str, Any]]) -> None:
     _logger.info("%s", title)
     for r in rows:
-        _logger.info("  %-19s k=%-3d hits=%-4d positives=%-5d precision=%s (random %s) lift=%s recall=%s (random %s)",
+        _logger.info("  %-34s k=%-3d hits=%-4d positives=%-5d precision=%s (random %s) lift=%s recall=%s (random %s)",
                      r["ranking"], r["k"], r["hits"], r["positives"], _fmt(r["precision"]), _fmt(r["random_precision"]),
                      _fmt(r["lift"]), _fmt(r["recall"]), _fmt(r["random_recall"]))
 
@@ -101,6 +102,7 @@ def write_results(result: BacktestResult, out_dir: Path, meta: Dict[str, Any]) -
     _write_csv(out_dir / "metrics_tier0.csv", tier0_rows)
     _write_csv(out_dir / "snapshots.csv", result.snapshots)
     _write_csv(out_dir / "return_labels.csv", result.return_rows)
+    _write_csv(out_dir / "scores.csv", result.score_rows)
     summary = {
         **meta,
         "snapshots": len(result.snapshots),

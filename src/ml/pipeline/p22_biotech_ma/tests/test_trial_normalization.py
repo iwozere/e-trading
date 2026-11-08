@@ -161,6 +161,28 @@ def test_extract_trial_record_reads_lead_sponsor():
     assert record.lead_sponsor == "Vertex Pharmaceuticals Incorporated"
 
 
+def test_extract_trial_record_reads_start_and_first_posted_dates():
+    study = {"protocolSection": {
+        "identificationModule": {"nctId": "NCT00000002"},
+        "statusModule": {"startDateStruct": {"date": "2015-03", "type": "ACTUAL"},
+                         "studyFirstPostDateStruct": {"date": "2015-01-12", "type": "ACTUAL"}},
+    }}
+    record = extract_trial_record(study, _KNOWN_FROM)
+    assert record is not None
+    assert (record.start_date, record.first_posted_date) == (date(2015, 3, 1), date(2015, 1, 12))
+    vx522 = extract_trial_record(_STUDY, _KNOWN_FROM)
+    assert vx522 is not None and vx522.first_posted_date is None  # not in the payload
+
+
+def test_write_trial_records_passes_trial_dates_to_upsert():
+    repo = MagicMock()
+    study = _single_intervention_study()
+    study["protocolSection"]["statusModule"] = {"startDateStruct": {"date": "2016-05-01"}}
+    write_trial_records(extract_trial_records([study], _KNOWN_FROM), repo)
+    kwargs = repo.upsert_trial.call_args.kwargs
+    assert (kwargs["start_date"], kwargs["first_posted_date"]) == (date(2016, 5, 1), None)
+
+
 def test_write_trial_records_without_company_writes_trial_and_never_links():
     repo = MagicMock()
     records = extract_trial_records([_single_intervention_study()], _KNOWN_FROM)

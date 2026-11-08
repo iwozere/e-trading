@@ -1,5 +1,6 @@
 """
-P22 — the spec §0.3 baseline rankings, plus the model's own ranking, as ordered company-id lists.
+P22 — the spec §0.3 baseline rankings, plus the model's own ranking and one per composite block
+(for attribution: which block carries signal), as ordered company-id lists.
 
 Every ranking puts unknown values last and breaks remaining ties by `company_id`, so a run is
 reproducible. Random is not a list: its expectations come straight from `metrics.PooledMetrics`.
@@ -15,6 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p22_biotech_ma.features.block_b import PHASE_RANK_LABELS
+from src.ml.pipeline.p22_biotech_ma.scoring.weights_config import FRICTION_TERM
 
 PHASE2_RANK = PHASE_RANK_LABELS.index("PHASE2")
 
@@ -47,6 +49,20 @@ def catalyst_proximity(features: Mapping[int, Mapping[str, Optional[float]]]) ->
         if phase is not None and phase >= PHASE2_RANK and days is not None:
             eligible.append((days, cid))
     return [cid for _, cid in sorted(eligible)]
+
+
+def block_ranking(rows: Sequence[Dict[str, Any]], block: str, company_ids: Optional[set[int]] = None) -> List[int]:
+    """
+    One block's score alone, as the composite uses it: descending, except the subtracted friction
+    term, which ranks ascending. Names without the block are left out, so the list can be short.
+    """
+    sign = 1.0 if block == FRICTION_TERM else -1.0
+    scored: List[tuple[float, int]] = []
+    for r in rows:
+        value = (r.get("subscores") or {}).get("blocks", {}).get(block)
+        if value is not None and (company_ids is None or r["company_id"] in company_ids):
+            scored.append((sign * value, r["company_id"]))
+    return [cid for _, cid in sorted(scored)]
 
 
 def model_ranking(rows: Sequence[Dict[str, Any]], company_ids: Optional[set[int]] = None) -> List[int]:

@@ -97,6 +97,8 @@ class TrialRecord:
     conditions: List[str]  # for asset therapeutic_area classification and indication text
     single_intervention_type: Optional[str] = None  # CT.gov DRUG/BIOLOGICAL, for asset modality classification
     lead_sponsor: Optional[str] = None  # sponsorCollaboratorsModule.leadSponsor.name, for company attribution
+    start_date: Optional[date] = None  # statusModule.startDateStruct (actual or estimated)
+    first_posted_date: Optional[date] = None  # statusModule.studyFirstPostDateStruct; when the trial became public
 
 
 def _parse_ctgov_date(raw: Optional[str]) -> Optional[date]:
@@ -176,6 +178,8 @@ def extract_trial_record(study: Dict[str, Any], known_from: datetime) -> Optiona
         conditions=extract_conditions(study),
         single_intervention_type=extract_single_intervention_type(study),
         lead_sponsor=protocol.get("sponsorCollaboratorsModule", {}).get("leadSponsor", {}).get("name"),
+        start_date=_parse_ctgov_date(status_module.get("startDateStruct", {}).get("date")),
+        first_posted_date=_parse_ctgov_date(status_module.get("studyFirstPostDateStruct", {}).get("date")),
     )
 
 
@@ -218,6 +222,8 @@ def write_trial_records(
             status=record.status,
             enrollment=record.enrollment,
             primary_completion_date=record.primary_completion_date,
+            start_date=record.start_date,
+            first_posted_date=record.first_posted_date,
             uses_biomarker_selection=record.uses_biomarker_selection,
             is_randomized=record.is_randomized,
             has_active_comparator=record.has_active_comparator,

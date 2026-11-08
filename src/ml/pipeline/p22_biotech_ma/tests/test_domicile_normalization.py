@@ -1,12 +1,13 @@
 """Tests for ingest/domicile_normalization.py (spec §4.5)."""
 
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.ml.pipeline.p22_biotech_ma.ingest.domicile_normalization import extract_is_foreign_domiciled
+from src.ml.pipeline.p22_biotech_ma.ingest.domicile_normalization import extract_is_foreign_domiciled, is_unchanged
 
 
 def test_extract_is_foreign_domiciled_true_via_is_foreign_location_flag():
@@ -47,3 +48,10 @@ def test_extract_is_foreign_domiciled_reads_country_georgia_code_as_us_state():
     """SEC code 2Q is the country Georgia; Alpharetta filers (Clearside, Biota) chose it for the state."""
     submissions = {"addresses": {"business": {"stateOrCountry": "2Q", "isForeignLocation": 1}}}
     assert extract_is_foreign_domiciled(submissions) is False
+
+
+def test_is_unchanged_only_when_open_fact_holds_same_value():
+    assert is_unchanged({"value": Decimal("0.0")}, 0.0)
+    assert not is_unchanged({"value": Decimal("0.0")}, 1.0)
+    assert not is_unchanged({"value": None}, 0.0)
+    assert not is_unchanged(None, 0.0)

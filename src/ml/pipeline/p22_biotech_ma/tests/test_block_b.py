@@ -29,7 +29,7 @@ class _FakeRepo:
     def __init__(self, trials: List[Dict[str, Any]] | None = None):
         self._trials = trials or []
 
-    def get_trials_for_company(self, company_id: int):
+    def get_trials_for_company(self, company_id: int, as_of=None):
         del company_id
         return self._trials
 

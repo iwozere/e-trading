@@ -32,7 +32,7 @@ class _Repo:
         del company_id, as_of
         return self.facts.get(metric, [])
 
-    def get_trials_for_company(self, company_id: int):
+    def get_trials_for_company(self, company_id: int, as_of=None):
         del company_id
         return [{"nct_id": "NCT01", "asset_id": 5, "asset_name": "XY-101", "therapeutic_area": "oncology_solid",
                  "phase": "PHASE3", "status": "RECRUITING", "primary_completion_date": date(2027, 3, 1)}]

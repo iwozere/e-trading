@@ -11,7 +11,9 @@ For each monthly snapshot `as_of`:
    acquirer as of `as_of`, size floor and asset floor not known to fail. Companies whose own deal is
    already pending at `as_of` are removed first (`labels.DealLabels.pending`).
 3. **Rankings:** the Phase 1 model (`score_universe` restricted to those targets), naive-informed and
-   catalyst-proximity (`baselines`); random is reported as its exact expectation.
+   catalyst-proximity (`baselines`), and each composite block alone (`block:<name>`, attribution only);
+   random is reported as its exact expectation. Every scored target is also kept as one row of
+   `score_rows` (block scores, raw features, label) for offline analysis.
 4. **Metrics** at each k, for all names and separately for Tier 0 names (spec §9: Tier 0 is the
    honest measure of Blocks A–F), pooled over snapshots (`metrics`).
 
@@ -19,9 +21,9 @@ Snapshots whose 24-month label window runs past `labels_complete_through` are sk
 The spec's 24-month embargo (§5.5, §8.4) separates training from test data; Phase 1 has nothing
 fitted, so every snapshot is out-of-sample and no embargo applies until the M8 model.
 
-Known lookahead gaps inherited from the feature store, not introduced here: `p22_trial` is not
-bitemporal (phases and completion dates are today's), and the DERA quarter is used from its quarter
-end although DERA publishes it some weeks later.
+Known lookahead gaps inherited from the feature store, not introduced here: trials are read as of
+their first-posted date, but each trial's phase and primary completion date are today's values; and
+the DERA quarter is used from its quarter end although DERA publishes it some weeks later.
 """
 
 from __future__ import annotations
@@ -48,7 +50,7 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
-RANKINGS = ("model", "naive_informed", "catalyst_proximity")
+BLOCK_RANKING_PREFIX = "block:"
 
 
 @dataclass(frozen=True)
@@ -70,6 +72,7 @@ class BacktestResult:
     tier0: MetricsTable
     snapshots: List[Dict[str, Any]] = field(default_factory=list)
     return_rows: List[Dict[str, Any]] = field(default_factory=list)
+    score_rows: List[Dict[str, Any]] = field(default_factory=list)
 
 
 def snapshot_dates(window: BacktestWindow) -> List[date]:
@@ -109,8 +112,46 @@ def baseline_features(company_ids: Sequence[int], as_of: date, ctx: FeatureConte
 
 
 def _add_rankings(table: MetricsTable, rankings: Mapping[str, List[int]], positives: set[int], universe_size: int) -> None:
-    for name in RANKINGS:
-        table.add(name, rankings[name], positives, universe_size)
+    for name, ranked in rankings.items():
+        table.add(name, ranked, positives, universe_size)
+
+
+def _rankings(rows: Sequence[Dict[str, Any]], features: Mapping[int, Mapping[str, Optional[float]]],
+              blocks: Sequence[str], company_ids: Optional[set[int]] = None) -> Dict[str, List[int]]:
+    """Model, the two baselines and one ranking per block, restricted to `company_ids` when given."""
+    scoped = features if company_ids is None else {cid: f for cid, f in features.items() if cid in company_ids}
+    rankings = {
+        "model": baselines.model_ranking(rows, company_ids),
+        "naive_informed": baselines.naive_informed(scoped),
+        "catalyst_proximity": baselines.catalyst_proximity(scoped),
+    }
+    for block in blocks:
+        rankings[BLOCK_RANKING_PREFIX + block] = baselines.block_ranking(rows, block, company_ids)
+    return rankings
+
+
+def score_rows_for_snapshot(as_of: date, rows: Sequence[Dict[str, Any]], features: Mapping[int, Mapping[str, Optional[float]]],
+                            positives: set[int], pe_positives: set[int]) -> List[Dict[str, Any]]:
+    """
+    One flat row per scored target: label, composite, tier, every block score and raw feature, and
+    the baseline inputs. Column names are prefixed `block_` / `f_` so they cannot collide.
+    """
+    out: List[Dict[str, Any]] = []
+    for r in rows:
+        cid = r["company_id"]
+        subscores = r.get("subscores") or {}
+        row: Dict[str, Any] = {
+            "as_of": as_of, "company_id": cid, "ticker": r.get("ticker"),
+            "positive": int(cid in positives), "pe_positive": int(cid in pe_positives),
+            "composite": r.get("composite"), "tier": r.get("tier"), "fundamental": subscores.get("fundamental"),
+            "coverage": subscores.get("coverage"), "dilution_gate": subscores.get("dilution_gate"),
+            "strategic_fit_raw": subscores.get("strategic_fit_raw"),
+        }
+        row.update({f"block_{k}": v for k, v in (subscores.get("blocks") or {}).items()})
+        row.update({f"f_{k}": v for k, v in (subscores.get("features") or {}).items()})
+        row.update({f"f_{k}": v for k, v in features.get(cid, {}).items() if f"f_{k}" not in row})
+        out.append(row)
+    return out
 
 
 def run_snapshot(
@@ -125,7 +166,7 @@ def run_snapshot(
     Score one snapshot and build every ranking. Writes nothing.
 
     Returns:
-        `{"targets", "rows", "rankings", "tier0_rankings", "tier0_ids", "positives", "pe_positives", "excluded"}`.
+        `{"targets", "rows", "features", "rankings", "tier0_rankings", "tier0_ids", "positives", "pe_positives", "excluded"}`.
     """
     companies = repo.list_companies_full()
     by_cik = {c["cik"]: c for c in companies if c.get("cik")}
@@ -141,21 +182,14 @@ def run_snapshot(
     result = score_universe(repo, as_of, scoring_config, acquirers, target_ids=targets)
     features = baseline_features(targets, as_of, ctx)
     tier0_ids = {r["company_id"] for r in result.rows if r["tier"] == 0}
-    tier0_features = {cid: f for cid, f in features.items() if cid in tier0_ids}
     target_set = set(targets)
+    blocks = list(scoring_config.composite)
     return {
         "targets": targets,
         "rows": result.rows,
-        "rankings": {
-            "model": baselines.model_ranking(result.rows),
-            "naive_informed": baselines.naive_informed(features),
-            "catalyst_proximity": baselines.catalyst_proximity(features),
-        },
-        "tier0_rankings": {
-            "model": baselines.model_ranking(result.rows, tier0_ids),
-            "naive_informed": baselines.naive_informed(tier0_features),
-            "catalyst_proximity": baselines.catalyst_proximity(tier0_features),
-        },
+        "features": features,
+        "rankings": _rankings(result.rows, features, blocks),
+        "tier0_rankings": _rankings(result.rows, features, blocks, tier0_ids),
         "tier0_ids": tier0_ids,
         "positives": labels.positives(as_of) & target_set,
         "pe_positives": labels.pe_positives(as_of) & target_set,
@@ -202,6 +236,7 @@ def run_backtest(
         _add_rankings(result.all_names, snap["rankings"], positives, len(targets))
         _add_rankings(result.tier0, snap["tier0_rankings"], positives & tier0_ids, len(tier0_ids))
         result.return_rows.extend(return_labels(repo, labels, sorted(positives), as_of, cvr_policy))
+        result.score_rows.extend(score_rows_for_snapshot(as_of, snap["rows"], snap["features"], positives, snap["pe_positives"]))
 
         top50 = set(snap["rankings"]["model"][:50])
         summary = {

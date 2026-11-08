@@ -148,6 +148,10 @@ class P22Trial(Base):
     status: Mapped[str | None] = mapped_column(Text)
     enrollment: Mapped[int | None] = mapped_column(Integer)
     primary_completion_date: Mapped[date | None] = mapped_column(Date)
+    # When the trial became public (migration 018): Block B reads a trial as of a date only once
+    # first posted, or started when the posted date is not landed yet.
+    start_date: Mapped[date | None] = mapped_column(Date)
+    first_posted_date: Mapped[date | None] = mapped_column(Date)
     uses_biomarker_selection: Mapped[bool | None] = mapped_column(Boolean)
     is_randomized: Mapped[bool | None] = mapped_column(Boolean)
     has_active_comparator: Mapped[bool | None] = mapped_column(Boolean)

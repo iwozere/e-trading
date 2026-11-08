@@ -83,6 +83,7 @@ CLINICALTRIALS_FIELDS: list[str] = [
     "protocolSection.outcomesModule.primaryOutcomes",
     "protocolSection.designModule.enrollmentInfo",
     "protocolSection.statusModule.startDateStruct",
+    "protocolSection.statusModule.studyFirstPostDateStruct",
     "protocolSection.statusModule.primaryCompletionDateStruct",
     "protocolSection.statusModule.completionDateStruct",
     "protocolSection.contactsLocationsModule.locations",

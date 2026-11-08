@@ -49,6 +49,11 @@ _US_STATE_OR_TERRITORY_CODES = frozenset({
 _MISCODED_US_STATES = frozenset({"2Q"})
 
 
+def is_unchanged(open_fact: Optional[Dict[str, Any]], value: float) -> bool:
+    """True when the open stored fact already holds `value`, so a new bitemporal row would only repeat it."""
+    return open_fact is not None and open_fact.get("value") is not None and float(open_fact["value"]) == value
+
+
 def extract_is_foreign_domiciled(submissions: Dict[str, Any]) -> Optional[bool]:
     """
     Derive `is_foreign_domiciled` from a landed `sec_submissions` payload. `None` if the payload

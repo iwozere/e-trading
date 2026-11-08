@@ -97,7 +97,7 @@ def asset_floor_met(company_id: int, as_of: date, ctx: FeatureContext) -> Option
     has trials with a recognizable phase and all of them are EARLY_PHASE1 (preclinical/platform
     names). `None` when no phased trial is linked, which is common: trials reach a company only via
     single-intervention linkage (docs/Tasks.md item 8), so missing trials are not evidence of no
-    program. `p22_trial` is not bitemporal, so this reads current trial phases (same gap as `phase_max`).
+    program. Reads the trials public by `as_of`, at their current phase (`FeatureContext.get_trials_for_company`).
     """
     best = phase_max(company_id, as_of, ctx)
     if best is None:

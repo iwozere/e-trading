@@ -201,7 +201,7 @@ class _FakeRepo(MarketCapFixtureMixin):
     def list_companies_full(self) -> List[Dict[str, Any]]:
         return self.companies
 
-    def get_trials_for_company(self, company_id: int):
+    def get_trials_for_company(self, company_id: int, as_of=None):
         return self.trials.get(company_id, [])
 
     def get_assets_for_company(self, company_id: int):
@@ -220,7 +220,7 @@ class _FakeRepo(MarketCapFixtureMixin):
         del acquirer_id
         return []
 
-    def count_phase3_assets_by_therapeutic_area(self, company_id: int):
+    def count_phase3_assets_by_therapeutic_area(self, company_id: int, as_of=None):
         del company_id
         return {}
 

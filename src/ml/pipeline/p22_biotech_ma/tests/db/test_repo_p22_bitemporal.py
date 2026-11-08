@@ -275,6 +275,40 @@ def test_get_trials_for_company_returns_asset_and_trial_fields(db_session) -> No
     }]
 
 
+def test_get_open_financial_fact_returns_only_the_open_row(db_session) -> None:
+    repo = P22Repo(db_session)
+    company_id = repo.upsert_company(cik="0000000062", name="Open Fact Inc", role="target")
+    assert repo.get_open_financial_fact(company_id, "is_foreign_domiciled") is None
+    repo.upsert_financial_fact_bitemporal(company_id=company_id, metric="is_foreign_domiciled", value=1.0,
+                                          known_from=datetime(2026, 1, 5, tzinfo=timezone.utc), source_id="test")
+    repo.upsert_financial_fact_bitemporal(company_id=company_id, metric="is_foreign_domiciled", value=0.0,
+                                          known_from=datetime(2026, 2, 5, tzinfo=timezone.utc), source_id="test")
+    open_fact = repo.get_open_financial_fact(company_id, "is_foreign_domiciled")
+    assert open_fact is not None and float(open_fact["value"]) == 0.0 and open_fact["valid_to"] is None
+
+
+def test_trial_reads_as_of_keep_only_trials_public_by_then(db_session) -> None:
+    """Block B's point-in-time read: a trial counts once first posted (start date as fallback);
+    one with neither date is left out of an as-of read but kept in the live read."""
+    repo = P22Repo(db_session)
+    company_id = repo.upsert_company(cik="0000000061", name="As Of Trials Inc", role="target")
+    asset_id = repo.upsert_asset(company_id=company_id, name="AO-1", therapeutic_area="oncology_solid")
+    repo.upsert_trial(nct_id="NCT00006001", phase="PHASE3", first_posted_date=date(2017, 1, 10), start_date=date(2016, 6, 1))
+    repo.upsert_trial(nct_id="NCT00006002", phase="PHASE3", start_date=date(2019, 2, 1))
+    repo.upsert_trial(nct_id="NCT00006003", phase="PHASE3")
+    repo.replace_trial_asset_links(company_id, [(n, asset_id) for n in ("NCT00006001", "NCT00006002", "NCT00006003")])
+
+    def nct_ids(as_of):
+        return sorted(t["nct_id"] for t in repo.get_trials_for_company(company_id, as_of=as_of))
+
+    assert nct_ids(date(2016, 12, 31)) == []  # started, but not posted yet
+    assert nct_ids(date(2018, 1, 1)) == ["NCT00006001"]
+    assert nct_ids(date(2019, 2, 1)) == ["NCT00006001", "NCT00006002"]
+    assert len(nct_ids(None)) == 3
+    assert repo.count_phase3_assets_by_therapeutic_area(company_id, as_of=date(2016, 12, 31)) == {}
+    assert repo.count_phase3_assets_by_therapeutic_area(company_id, as_of=date(2018, 1, 1)) == {"oncology_solid": 1}
+
+
 def test_replace_trial_asset_links_shares_trials_and_replaces_only_own_links(db_session) -> None:
     """One NCT ID can belong to several companies (migration 013); re-linking one company must
     neither touch the other's link nor keep its own stale links, and unlinked assets drop out of

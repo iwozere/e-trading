@@ -43,7 +43,7 @@ class _FakeRepo(MarketCapFixtureMixin):
         del company_id
         return self._facts.get("market_cap")
 
-    def get_trials_for_company(self, company_id: int):
+    def get_trials_for_company(self, company_id: int, as_of=None):
         del company_id
         return self._trials
 
