@@ -44,8 +44,8 @@ _US_STATE_OR_TERRITORY_CODES = frozenset({
 
 
 # "2Q" is SEC's code for the country Georgia. Filers in the US state pick it by mistake: Biota/Vaxart
-# (2014-2018) and Clearside (2018-2020) 10-Ks read "Alpharetta, 2Q". No universe company is based in the
-# country, so the code is read as the state.
+# (2014-2018) and Clearside (2018-2020) 10-Ks read "Alpharetta, 2Q", GeoVax (2010-2020) "Smyrna, 2Q".
+# No universe company is based in the country, so the code is read as the state.
 _MISCODED_US_STATES = frozenset({"2Q"})
 
 
