@@ -4,7 +4,7 @@ computation path (facts present) and the null path (spec §8.1: "including the n
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -20,12 +20,13 @@ from src.ml.pipeline.p22_biotech_ma.features.block_a import (
     revenue_at_risk_5y,
 )
 from src.ml.pipeline.p22_biotech_ma.features.context import FeatureContext
+from src.ml.pipeline.p22_biotech_ma.tests.fake_market_repo import MarketCapFixtureMixin
 
 _AS_OF = date(2026, 9, 1)
 _COMPANY_ID = 7
 
 
-class _FakeRepo:
+class _FakeRepo(MarketCapFixtureMixin):
     """Duck-typed P22Repo stand-in for Block A's reads."""
 
     def __init__(
@@ -39,10 +40,15 @@ class _FakeRepo:
         self._phase3_counts = phase3_counts or {}
 
     def get_financial_facts_as_of(self, company_id: int, metric: str, as_of_date: date):
-        del company_id, as_of_date
+        if metric == "shares_outstanding":
+            return self.shares_outstanding_rows(company_id, as_of_date)
         if metric in self._facts:
             return [{"value": self._facts[metric]}]
         return []
+
+    def market_cap_fixture(self, company_id: int) -> Optional[float]:
+        del company_id
+        return self._facts.get("market_cap")
 
     def get_patent_expiries_for_acquirer(self, acquirer_id: int):
         del acquirer_id

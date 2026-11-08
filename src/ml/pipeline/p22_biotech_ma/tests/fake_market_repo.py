@@ -41,3 +41,28 @@ class FakeMarketRepo:
 
     def get_company_by_cik(self, cik: str) -> Optional[Dict[str, Any]]:
         return self.companies.get(cik)
+
+
+class MarketCapFixtureMixin:
+    """
+    For fakes whose fixtures state `market_cap` directly: `FeatureContext.get_market_cap` derives it from a
+    raw close and a share count, so the fixture value is served as a close on `as_of` times one share.
+
+    A fake using this implements `market_cap_fixture(company_id)` and routes `shares_outstanding` reads
+    through `shares_outstanding_rows`.
+    """
+
+    def market_cap_fixture(self, company_id: int) -> Optional[float]:
+        raise NotImplementedError
+
+    def get_latest_raw_close_as_of(self, company_id: int, as_of: date, vendor: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        del vendor
+        value = self.market_cap_fixture(company_id)
+        return {"trade_date": as_of, "close_raw": value} if value is not None else None
+
+    def get_splits_as_of(self, company_id: int, as_of: date) -> List[Dict[str, Any]]:
+        del company_id, as_of
+        return []
+
+    def shares_outstanding_rows(self, company_id: int, as_of: date) -> List[Dict[str, Any]]:
+        return [{"value": 1.0, "period_end": as_of}] if self.market_cap_fixture(company_id) is not None else []

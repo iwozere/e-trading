@@ -648,3 +648,28 @@ def test_get_company_by_cik_matches_bare_and_padded_forms(db_session) -> None:
         found = repo.get_company_by_cik(key)
         assert found is not None and found["company_id"] == company_id
     assert repo.get_company_by_cik("Padding Bio Inc") is None
+
+
+def test_history_backfill_inserts_only_before_stored_rows_and_leaves_them_alone(db_session) -> None:
+    """A 2016 backfill must not close the open 2026 row the way an out-of-order upsert would."""
+    repo = P22Repo(db_session)
+    company_id = repo.upsert_company(cik="0000000004", name="History Bio Inc", role="target")
+    repo.upsert_financial_fact_bitemporal(
+        company_id=company_id, metric="is_foreign_domiciled", value=1.0,
+        known_from=datetime(2026, 9, 8, tzinfo=timezone.utc), source_id="sec_submissions",
+    )
+    facts = [
+        {"known_from": datetime(2016, 3, 1, tzinfo=timezone.utc), "value": 1.0, "source_id": "efts"},
+        {"known_from": datetime(2014, 3, 1, tzinfo=timezone.utc), "value": 0.0, "source_id": "efts"},
+        {"known_from": datetime(2026, 10, 1, tzinfo=timezone.utc), "value": 0.0, "source_id": "efts"},  # after stored: skipped
+    ]
+    assert repo.insert_financial_fact_history(company_id=company_id, metric="is_foreign_domiciled", facts=facts) == 2
+    assert repo.insert_financial_fact_history(company_id=company_id, metric="is_foreign_domiciled", facts=facts) == 0
+
+    rows = sorted(repo.get_financial_facts_as_of(company_id, "is_foreign_domiciled", date(2026, 12, 31)), key=lambda r: r["known_from"])
+    assert [(r["value"], r["valid_from"], r["valid_to"]) for r in rows] == [
+        (0.0, date(2014, 3, 1), date(2016, 3, 1)),
+        (1.0, date(2016, 3, 1), date(2026, 9, 8)),
+        (1.0, date(2026, 9, 8), None),
+    ]
+    assert repo.get_financial_facts_as_of(company_id, "is_foreign_domiciled", date(2015, 1, 1))[0]["value"] == 0.0

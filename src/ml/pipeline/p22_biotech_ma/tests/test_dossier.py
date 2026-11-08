@@ -8,6 +8,7 @@ from typing import Any, Dict, List
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+import src.ml.pipeline.p22_biotech_ma.features.context as feature_context
 from src.ml.pipeline.p22_biotech_ma.ingest.market_cap import MarketCapResult
 from src.ml.pipeline.p22_biotech_ma.outputs import dossier
 
@@ -63,8 +64,14 @@ _SCORE = {
 }
 
 
+def _patch_market_cap(monkeypatch, fake) -> None:
+    """The dossier's identity line and Block C (through `FeatureContext.get_market_cap`) both derive market cap."""
+    monkeypatch.setattr(dossier, "compute_market_cap", fake)
+    monkeypatch.setattr(feature_context, "compute_market_cap", fake)
+
+
 def _render(monkeypatch) -> str:
-    monkeypatch.setattr(dossier, "compute_market_cap", lambda repo, cid, as_of: (
+    _patch_market_cap(monkeypatch, lambda repo, cid, as_of: (
         MarketCapResult(company_id=7, market_cap=500e6, price_trade_date=date(2026, 10, 29), shares_outstanding=50e6), None))
     return dossier.render_dossier(_Repo(), _COMPANY, _SCORE, _AS_OF, {"run_id": 3, "model_version": "v", "config_hash": "h"})
 
@@ -88,7 +95,7 @@ def test_dossier_shows_runway_arithmetic_and_process_signals(monkeypatch):
 
 
 def test_write_dossiers_only_ranked_top_n(monkeypatch, tmp_path):
-    monkeypatch.setattr(dossier, "compute_market_cap", lambda repo, cid, as_of: (None, "no_price"))
+    _patch_market_cap(monkeypatch, lambda repo, cid, as_of: (None, "no_price"))
     rows = [_SCORE, {**_SCORE, "company_id": 8, "rank_by_composite": None}]
     paths = dossier.write_dossiers(_Repo(), rows, _AS_OF, {"run_id": 3}, tmp_path, top_n=5)
     assert [p.name for p in paths] == ["001_XYZ.md"]

@@ -23,9 +23,16 @@ automatically, with no special-casing needed in the feature function itself.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import sys
+from dataclasses import dataclass, field
 from datetime import date
+from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+PROJECT_ROOT = Path(__file__).resolve().parents[5]
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.ml.pipeline.p22_biotech_ma.ingest.market_cap import compute_market_cap
 
 
 @dataclass(frozen=True)
@@ -34,6 +41,23 @@ class FeatureContext:
 
     as_of: date
     repo: Any
+    _market_caps: Dict[int, Optional[float]] = field(default_factory=dict, compare=False, repr=False)
+
+    def get_market_cap(self, company_id: int) -> Optional[float]:
+        """
+        Market cap as of `self.as_of`, derived from the raw close and share count known then
+        (`ingest.market_cap.compute_market_cap`), not read from stored `market_cap` facts.
+
+        The stored facts carry `known_from` = the day the daily job ran, so a backtest snapshot
+        before the job existed (2026-09) saw none and Block C scored nobody in 2016-2024.
+        Deriving here gives live and historical runs the same definition and the same guards
+        (stale price, stale share count, splits); both inputs are read as of `self.as_of`.
+        Cached per company because Block C asks for it several times per company.
+        """
+        if company_id not in self._market_caps:
+            result = compute_market_cap(self.repo, company_id, self.as_of)[0]
+            self._market_caps[company_id] = result.market_cap if result is not None else None
+        return self._market_caps[company_id]
 
     def get_latest_fact(self, company_id: int, metric: str) -> Optional[float]:
         """

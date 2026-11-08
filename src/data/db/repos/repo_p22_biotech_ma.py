@@ -297,6 +297,55 @@ class P22Repo:
         self.session.flush()
         return new_row.fact_id
 
+    def insert_financial_fact_history(self, *, company_id: int, metric: str, facts: Sequence[Dict[str, Any]]) -> int:
+        """
+        Backfill facts known *before* every stored row of `(company_id, metric)` as closed history rows.
+
+        `upsert_financial_fact_bitemporal` assumes writes arrive in time order: writing a 2016 fact
+        after a 2026 one would close the 2026 open row. A history backfill instead inserts only the
+        facts whose `known_from` precedes the earliest stored row, chaining each row's `valid_to` to the
+        next row's `valid_from` (the last one's to the earliest stored row's, or left open when none is
+        stored). Stored rows are never touched, so a rerun inserts nothing.
+
+        Args:
+            company_id: The company.
+            metric: The metric.
+            facts: Dicts with `known_from` (tz-aware), `value`, `source_id`, and optional `valid_from`,
+                `period_end`, `unit`, `source_url`. Any order.
+
+        Returns:
+            Rows inserted.
+        """
+        earliest = self.session.execute(
+            select(P22FinancialFact)
+            .where(P22FinancialFact.company_id == company_id, P22FinancialFact.metric == metric)
+            .order_by(P22FinancialFact.known_from.asc())
+            .limit(1)
+        ).scalars().first()
+        history = sorted(
+            (f for f in facts if earliest is None or f["known_from"] < earliest.known_from), key=lambda f: f["known_from"]
+        )
+        valid_froms = [f.get("valid_from") or f["known_from"].date() for f in history]
+        for i, fact in enumerate(history):
+            if i + 1 < len(history):
+                valid_to: Optional[date] = valid_froms[i + 1]
+            else:
+                valid_to = earliest.valid_from if earliest is not None else None
+            self.session.add(P22FinancialFact(
+                company_id=company_id,
+                metric=metric,
+                value=fact["value"],
+                unit=fact.get("unit", "USD"),
+                period_end=fact.get("period_end"),
+                valid_from=valid_froms[i],
+                valid_to=valid_to,
+                known_from=fact["known_from"],
+                source_id=fact["source_id"],
+                source_url=fact.get("source_url"),
+            ))
+        self.session.flush()
+        return len(history)
+
     def get_financial_facts_as_of(
         self, company_id: int, metric: str, as_of_date: date
     ) -> List[Dict[str, Any]]:

@@ -19,12 +19,13 @@ from src.ml.pipeline.p22_biotech_ma.features.block_c import (
     size_band,
 )
 from src.ml.pipeline.p22_biotech_ma.features.context import FeatureContext
+from src.ml.pipeline.p22_biotech_ma.tests.fake_market_repo import MarketCapFixtureMixin
 
 _AS_OF = date(2024, 6, 1)
 _COMPANY_ID = 7
 
 
-class _FakeRepo:
+class _FakeRepo(MarketCapFixtureMixin):
     """Duck-typed P22Repo stand-in: metric -> value, read through get_financial_facts_as_of."""
 
     def __init__(self, facts: Dict[str, float], trials: Optional[List[Dict[str, Any]]] = None):
@@ -32,10 +33,15 @@ class _FakeRepo:
         self._trials = trials or []
 
     def get_financial_facts_as_of(self, company_id: int, metric: str, as_of_date: date):
-        del company_id, as_of_date
+        if metric == "shares_outstanding":
+            return self.shares_outstanding_rows(company_id, as_of_date)
         if metric in self._facts:
             return [{"value": self._facts[metric]}]
         return []
+
+    def market_cap_fixture(self, company_id: int) -> Optional[float]:
+        del company_id
+        return self._facts.get("market_cap")
 
     def get_trials_for_company(self, company_id: int):
         del company_id

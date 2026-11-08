@@ -17,6 +17,7 @@ from src.ml.pipeline.p22_biotech_ma.scoring import score_run
 from src.ml.pipeline.p22_biotech_ma.scoring.composite import block_scores, fundamental_score, rank_desc, rank_percentile
 from src.ml.pipeline.p22_biotech_ma.scoring.fit import AcquirerProfile, TargetProfile, best_fits, fit, size_feasibility
 from src.ml.pipeline.p22_biotech_ma.scoring.weights_config import FeatureWeight, config_hash, load_scoring_config
+from src.ml.pipeline.p22_biotech_ma.tests.fake_market_repo import MarketCapFixtureMixin
 
 _AS_OF = date(2026, 10, 29)
 CONFIG = load_scoring_config()
@@ -168,7 +169,7 @@ def test_rank_desc_breaks_ties_by_company_id_and_skips_unknown():
 # score run (end to end over a fake repo)
 # ---------------------------------------------------------------------
 
-class _FakeRepo:
+class _FakeRepo(MarketCapFixtureMixin):
     """Three targets and one acquirer; target 12 has a verified acquisition-option partner."""
 
     def __init__(self) -> None:
@@ -207,9 +208,13 @@ class _FakeRepo:
         return self.assets.get(company_id, [])
 
     def get_financial_facts_as_of(self, company_id: int, metric: str, as_of: date):
-        del as_of
+        if metric == "shares_outstanding":
+            return self.shares_outstanding_rows(company_id, as_of)
         value = self.facts.get((company_id, metric))
         return [{"value": value}] if value is not None else []
+
+    def market_cap_fixture(self, company_id: int) -> Optional[float]:
+        return self.facts.get((company_id, "market_cap"))
 
     def get_patent_expiries_for_acquirer(self, acquirer_id: int):
         del acquirer_id

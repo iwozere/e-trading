@@ -179,7 +179,7 @@ def equity_capacity(company_id: int, as_of: date, ctx: FeatureContext) -> Option
     Always `None` in production today until both of `currency_quality`'s own inputs exist.
     """
     del as_of
-    market_cap = ctx.get_latest_fact(company_id, "market_cap")
+    market_cap = ctx.get_market_cap(company_id)
     currency_quality = ctx.get_latest_fact(company_id, "currency_quality")
     if market_cap is None or currency_quality is None:
         return None

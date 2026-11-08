@@ -76,6 +76,12 @@ weights live in `config/pipeline/p22_weights.yaml`:
 python src/ml/pipeline/p22_biotech_ma/jobs/run_scoring.py --dry-run   # watchlist + dossiers, DB rolled back
 ```
 
+Domicile history for backtests (filing-time business addresses; rerunnable, inserts only older history):
+
+```bash
+python -m src.ml.pipeline.p22_biotech_ma.cli.domicile_history_cli --start 2010-01-01 --dry-run
+```
+
 Label coverage, walk-forward backtest (spec §0.3, M6) and the lookahead audit (spec §8.3), all read-only:
 
 ```bash

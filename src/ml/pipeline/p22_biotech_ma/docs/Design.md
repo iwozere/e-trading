@@ -345,6 +345,17 @@ Block A (`revenue_at_risk` needs `ttm_revenue_usd`), `ta_overlap` (needs Block A
 (no footprint data) and `size_feasibility` (needs `dry_powder`) are still unknown. `dilution_risk`
 reads the nearest upcoming trial completion since 2026-10-30.
 
+**Point-in-time inputs for the backtest (2026-11-08).** The first full-label backtest showed Blocks C and
+E scoring nobody in any 2016–2024 snapshot: the stored `market_cap` and `is_foreign_domiciled` facts carry
+`known_from` = the day the live job ran (2026-09 on). Market cap is now derived on read
+(`FeatureContext.get_market_cap` → `market_cap.compute_market_cap`, the same function the size floor
+uses), so live and historical runs share one definition and its stale-price/stale-shares/split guards; the
+stored fact is no longer read by features. Domicile history comes from the business address on each
+10-K/20-F/40-F as filed (EFTS `biz_states`; `ingest/domicile_history.py`), one fact per change, inserted
+before the earliest stored row by `P22Repo.insert_financial_fact_history` so the live open row is untouched.
+Block A (`acquirer_pressure_matched`, weight 0.30) stays unknown live and historically: `total_ttm_revenue`
+is never normalized and `p22_patent_expiry` is empty on prod (checked 2026-11-08).
+
 The universe also drops companies failing the asset floor (spec §2.0.3, `block_b.asset_floor_met`):
 only when every phased trial is EARLY_PHASE1. No linked trial means unknown and the company stays,
 because trial linkage only covers single-intervention trials.

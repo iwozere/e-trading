@@ -883,6 +883,14 @@ use in the code/config; this section exists so they're all in one place to walk 
   not attributed (MacroGenics/ImmunoGen, Akari/Celsus); GENETIC-type interventions (gene therapy)
   are not asset candidates; the raw zone names payloads by content hash, so two companies with
   byte-identical hit lists share one manifest.
+- **ADDED 2026-11-08: first full-label backtest + point-in-time Blocks C/E.** After the coverage fixes (16
+  more deals from the DEFM14C rescan and 5 hand-added candidates, 552 deals in all) the backtest gave lift@50
+  1.31 (target 3.0), precision@25 0.085 (0.12), recall@200 1.20× random (2.0×), and `naive_informed` beat
+  the model (1.47). Every historical snapshot had Blocks C, E and A at zero coverage: `market_cap` and
+  `is_foreign_domiciled` facts were only ever stamped with 2026 `known_from`. Fixed: market cap derived on read
+  (`FeatureContext.get_market_cap`), domicile history backfilled from filing-time addresses
+  (`cli/domicile_history_cli.py`). Rerun the backtest after the backfill. Still open: Block A inputs
+  (`total_ttm_revenue`, `p22_patent_expiry` empty on prod), and trials not point-in-time (Block B lookahead).
 - **ADDED 2026-11-07: coverage gaps → DEFM14C scan + `add-candidate`.** `coverage` after the first import
   (802 vanished companies: 377 with a deal, 61 candidates-all-rejected, 364 no candidate) showed three gaps:
   (1) cluster-level rejects swallowed real takeovers that sat in the same <365-day prefill cluster as a

@@ -9,6 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p22_biotech_ma.features.context import FeatureContext
+from src.ml.pipeline.p22_biotech_ma.tests.fake_market_repo import FakeMarketRepo
 
 
 def test_get_latest_fact_returns_value_from_first_row():
@@ -84,3 +85,31 @@ def test_get_trailing_average_returns_none_when_nothing_known():
     ctx = FeatureContext(as_of=date(2024, 6, 1), repo=repo)
 
     assert ctx.get_trailing_average(7, "quarterly_opex_burn") is None
+
+
+def _market_repo() -> FakeMarketRepo:
+    repo = FakeMarketRepo()
+    repo.add_fact(7, "shares_outstanding", 10e6, period_end=date(2015, 12, 31), filed=date(2016, 2, 20))
+    repo.add_price(7, date(2016, 2, 29), 12.0)
+    repo.add_price(7, date(2016, 3, 31), 15.0)
+    # A stored fact written by the daily job in 2026 must not be what a 2016 snapshot sees.
+    repo.add_fact(7, "market_cap", 999e6, period_end=date(2026, 9, 1), filed=date(2026, 9, 1))
+    return repo
+
+
+def test_get_market_cap_derives_from_close_and_shares_known_on_as_of():
+    repo = _market_repo()
+    assert FeatureContext(as_of=date(2016, 3, 1), repo=repo).get_market_cap(7) == 120e6
+    assert FeatureContext(as_of=date(2016, 4, 1), repo=repo).get_market_cap(7) == 150e6
+
+
+def test_get_market_cap_none_before_shares_are_filed():
+    assert FeatureContext(as_of=date(2016, 2, 1), repo=_market_repo()).get_market_cap(7) is None
+
+
+def test_get_market_cap_is_cached_per_company():
+    repo = _market_repo()
+    ctx = FeatureContext(as_of=date(2016, 3, 1), repo=repo)
+    assert ctx.get_market_cap(7) == 120e6
+    repo.prices[7].clear()
+    assert ctx.get_market_cap(7) == 120e6

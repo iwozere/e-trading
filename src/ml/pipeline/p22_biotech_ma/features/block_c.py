@@ -49,7 +49,7 @@ _AVG_DAYS_PER_MONTH = 30.44
 def enterprise_value(company_id: int, as_of: date, ctx: FeatureContext) -> Optional[float]:
     """`market_cap - (cash + short_term_investments) + total_debt` (spec §4.3). May be negative
     (a legitimate result, spec §8.2) — market cap below net cash happens for real distressed names."""
-    market_cap = ctx.get_latest_fact(company_id, "market_cap")
+    market_cap = ctx.get_market_cap(company_id)
     cash = ctx.get_latest_fact(company_id, "cash_and_equivalents")
     if market_cap is None or cash is None:
         return None
@@ -125,7 +125,7 @@ def atm_capacity_pct(company_id: int, as_of: date, ctx: FeatureContext) -> Optio
     10-Q text parsing, not built) — always `None` today.
     """
     remaining_shelf = ctx.get_latest_fact(company_id, "atm_shelf_remaining")
-    market_cap = ctx.get_latest_fact(company_id, "market_cap")
+    market_cap = ctx.get_market_cap(company_id)
     if remaining_shelf is None or not market_cap:
         return None
     return remaining_shelf / market_cap
