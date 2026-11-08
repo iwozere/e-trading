@@ -15,7 +15,7 @@ Nasdaq CSV     ─→  universe_loader    ─→  k20_universe
 OHLCV feeds    ─→  eod_ingest         ─→  k20_signals
 EDGAR filings  ─→  filings_ingest     ─→  k20_signals / llm_queue.json
 Catalyst feeds ─→  calendar_sync      ─→  k20_catalysts
-FMP + Finnhub  ─→  revisions_ingest   ─→  k20_signals (revisions_score, gap 10.1)
+Yahoo + Finnhub ─→ revisions_ingest   ─→  k20_signals (revisions_score, gap 10.1)
 
 GDELT GKG      ─→  gdelt_processor    ─→  k20_sentiment_daily
 StockTwits     ─→  social_poll        ─→  k20_sentiment_daily
@@ -62,15 +62,23 @@ k20_*          ─→  weekly_report      ─→  Notification push
 - Populates `revisions_score` (0-30 pts, matching the full-mode formula's
   `30 × revisions` weight) plus its three raw component signals in
   `k20_signals`, for watchlist ∪ positions tickers, daily before the Sleeve A
-  screen (20:50 UTC weekdays, `p20_screen_turnaround` runs at 21:00).
-- Blends three sources so the score is useful immediately instead of needing
-  a cold start: Finnhub recommendation-trend momentum (immediate — Finnhub
-  returns several months of history in one call), FMP `grades` net
-  upgrades/downgrades over trailing 60d (immediate — dated history in one
-  call), and FMP `analyst-estimates` (`period=annual` — the only tier
-  available on the account's plan; `period=quarter` is 402) forward-EPS
-  60-day delta (warms up over ~60-90 days of the job's own daily snapshots —
-  the literal "forward-EPS revisions up 60d" signal §4.2 names).
+  screen (20:30 UTC weekdays, `p20_screen_turnaround` runs at 21:00).
+- Blends three sources, all usable from the first run: Finnhub
+  recommendation-trend momentum (Finnhub returns several months of history in
+  one call), Yahoo `upgrades_downgrades` net upgrades/downgrades over trailing
+  60d (dated history in one call), and the Yahoo `eps_trend` forward-EPS
+  60-day delta (next fiscal year, falling back to the current one; Yahoo
+  carries the consensus as of 60 days ago, so no snapshot warm-up — the
+  literal "forward-EPS revisions up 60d" signal §4.2 names).
+- Yahoo goes through yfinance with the project's shared curl_cffi session
+  (`yahoo_data_downloader.get_shared_session`). A run-scoped breaker skips
+  Yahoo after a rate limit or 20 consecutive failures; the score then falls
+  back to Finnhub only.
+- 2026-11-08: Yahoo replaced FMP `analyst-estimates`/`grades`. FMP's free
+  plan limits both to ~87 sample symbols, so most of the watchlist never
+  got FMP data. Raw signals were renamed `yahoo_*`; the old
+  `fmp_eps_avg_next_fy`/`fmp_grade_net_60d` rows stay in `k20_signals` as
+  history.
 - **Shadow mode**: `REVISIONS_FEED_AVAILABLE` stays `False` after this job
   ships. It writes signals with zero effect on live scoring
   (`sleeve_a.py`'s `_score_interim` only reads `revisions_score` when the

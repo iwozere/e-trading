@@ -30,18 +30,19 @@
 - **Wikipedia pageviews** — Wikimedia REST API (official, keyless; User-Agent with contact required); ticker → article via Wikidata SPARQL + MediaWiki search, cached in `DATA_CACHE_DIR/wikipedia/`
 - **EDGAR** — GKG files, Form 4, 8-K, 13D/G, 10-K/Q via EdgarDownloader
 - **Nasdaq** — Tickers CSV at path configured by `NASDAQ_TICKERS_CSV`
-- **FMP** (`/stable/analyst-estimates`, `/stable/grades`) and **Finnhub**
-  (`/stock/recommendation`) — Sleeve A revisions feed ingest (gap 10.1).
-  `period=quarter` on FMP's analyst-estimates and Finnhub's `eps-estimate`/
-  `revenue-estimate` are not available on the account's current plan tier
-  (402/403) — only `period=annual` and the endpoints above are used.
+- **Yahoo Finance** (yfinance `eps_trend`, `upgrades_downgrades`; keyless,
+  shared curl_cffi session from `src.data.downloader.yahoo_data_downloader`)
+  and **Finnhub** (`/stock/recommendation`) — Sleeve A revisions feed ingest
+  (gap 10.1). FMP was dropped on 2026-11-08: its free plan limits
+  analyst-estimates/grades to ~87 sample symbols, and Finnhub's
+  `eps-estimate`/`upgrade-downgrade` are premium-only.
 
 ## Environment Variables
 
 - `SCHEDULER_SYSTEM_USER_ID` — user_id for job_schedules rows (default: 1)
 - `REDDIT_API_KEY`, `REDDIT_API_SECRET`, `REDDIT_USER_AGENT` — optional; unset or the `.env.example` placeholder `xxx` means Reddit is skipped (ApeWisdom covers Reddit mentions)
-- `FMP_API_KEY`, `FINNHUB_API_KEY` — required by `revisions_ingest.py`; job is
-  skipped (logged) if either is unset
+- `FINNHUB_API_KEY` — required by `revisions_ingest.py`; job is skipped
+  (logged) if unset
 
 Note: `REVISIONS_FEED_AVAILABLE` is **not** an environment variable — it's a
 plain `bool` constant in `config.py` (default `False`), flipped by editing

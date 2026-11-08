@@ -359,7 +359,7 @@ Fallback input path: a watched YAML file (`positions.yml`) ingested by `risk_che
 
 | # | Gap | Priority | Note |
 |---|---|---|---|
-| 10.1 | Earnings estimate revisions / forward consensus | CRITICAL | **Sourced 2026-08-13**: `ingest/revisions_ingest.py` blends Finnhub `recommendation` trend momentum + FMP `grades` net upgrades/downgrades (both immediate) with FMP `analyst-estimates` (period=annual) forward-EPS 60d delta (warms up over ~60-90d). Shipped in shadow mode — `REVISIONS_FEED_AVAILABLE` stays false until the values are reviewed; Sleeve A still runs interim renormalized (§4.2.1), candidates still tagged `revisions:n/a`, until the flag flips. |
+| 10.1 | Earnings estimate revisions / forward consensus | CRITICAL | **Sourced 2026-08-13**: `ingest/revisions_ingest.py` blends Finnhub `recommendation` trend momentum + Yahoo `upgrades_downgrades` net upgrades/downgrades and the Yahoo `eps_trend` forward-EPS 60d delta (all immediate; Yahoo replaced FMP 2026-11-08 because the FMP free plan covers only ~87 sample symbols). Shipped in shadow mode — `REVISIONS_FEED_AVAILABLE` stays false until the values are reviewed; Sleeve A still runs interim renormalized (§4.2.1), candidates still tagged `revisions:n/a`, until the flag flips. |
 | 10.2 | Event calendars (earnings dates, PDUFA, spin-offs, index changes) | CRITICAL | Finnhub earnings calendar free; PDUFA scrapes + weekly manual verify |
 | 10.3 | NYSE/AMEX universe extension | CRITICAL | Nasdaq-only halves Sleeve A/B opportunity set |
 | 10.4 | Official FINRA short interest (bi-monthly) | HIGH | TRF ≠ outstanding SI |

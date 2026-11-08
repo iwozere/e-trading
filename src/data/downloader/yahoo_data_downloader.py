@@ -72,6 +72,16 @@ def _get_shared_session() -> curl_requests.Session:
         return _shared_session
 
 
+def get_shared_session() -> curl_requests.Session:
+    """
+    Public accessor for the process-wide yfinance session, for callers outside this module.
+
+    Returns:
+        The shared curl_cffi session (see ``_get_shared_session``).
+    """
+    return _get_shared_session()
+
+
 # ---------------------------------------------------------------------------
 # Partial ticker.info retry
 # ---------------------------------------------------------------------------

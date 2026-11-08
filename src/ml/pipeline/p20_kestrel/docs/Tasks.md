@@ -56,9 +56,9 @@
 - [x] Telegram bot hook example for /pos — added to README.md
 - [x] Integration tests (2 test files: morning chain + /pos roundtrip)
 - [x] Revisions feed ingest (gap 10.1, §4.2.1) — `ingest/revisions_ingest.py`
-      populates `revisions_score` from FMP `analyst-estimates`/`grades` +
-      Finnhub `recommendation` trends, registered as `p20_revisions_ingest`
-      (20:50 UTC weekdays). Ships in **shadow mode**: writes signals but
+      populates `revisions_score` from Yahoo `eps_trend`/`upgrades_downgrades`
+      (FMP until 2026-11-08) + Finnhub `recommendation` trends, registered as
+      `p20_revisions_ingest` (20:30 UTC weekdays). Ships in **shadow mode**: writes signals but
       `REVISIONS_FEED_AVAILABLE` stays `False` (zero scoring impact) until
       reviewed.
 - [x] Sleeve B1/B2 ingestion (gap 10.2, C12) — `ingest/pdufa_calendar_ingest.py`

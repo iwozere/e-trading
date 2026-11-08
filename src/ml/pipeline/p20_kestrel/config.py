@@ -85,22 +85,14 @@ AV_DAILY_QUOTA: int = 20
 # (stored in k20_signals, sleeve="A"), so the score is useful immediately
 # rather than needing a cold start:
 #   - Finnhub recommendation-trend momentum (immediate — history in one call)
-#   - FMP rating-change net count, trailing 60d (immediate — dated history)
-#   - FMP forward-EPS-consensus 60d delta (warms up over ~60-90d of our own
-#     daily snapshots — the literal "forward-EPS revisions up 60d" signal)
+#   - Yahoo rating-change net count, trailing 60d (immediate — dated history)
+#   - Yahoo forward-EPS-consensus 60d delta (immediate — yfinance eps_trend
+#     carries the 60-days-ago consensus; the "forward-EPS revisions up 60d" signal)
 # Point budgets sum to 30, matching the full-mode formula's `30 * revisions`
 # weight in §4.2. All are first-cut heuristics — expected to be recalibrated
 # after reviewing shadow-mode output (REVISIONS_FEED_AVAILABLE stays False
 # while this job writes signals but sleeve_a.py ignores them).
 REVISIONS_GRADES_WINDOW_DAYS: int = 60
-REVISIONS_EPS_DELTA_WINDOW_DAYS: int = 60
-REVISIONS_EPS_DELTA_TOLERANCE_DAYS: int = 7  # +/- around the 60d mark when matching a past snapshot
-# FMP free tier = 250 calls/day shared with P05's earnings calendar and DataManager fallbacks. Revisions makes
-# 2 calls per ticker, so 150 calls = 75 tickers/day in rotation (~375 tickers -> each refreshed every 5 trading
-# days, which still lands a snapshot inside the +/-7d EPS-delta window).
-REVISIONS_FMP_DAILY_CALL_BUDGET: int = 150
-# Tickers outside today's FMP slice score with their latest stored FMP values up to this old.
-REVISIONS_FMP_CARRY_FORWARD_DAYS: int = 10
 
 REVISIONS_FINNHUB_MAX_PTS: float = 12.0
 REVISIONS_GRADES_MAX_PTS: float = 8.0
