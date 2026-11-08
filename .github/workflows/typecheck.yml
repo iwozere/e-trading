@@ -31,13 +31,7 @@ jobs:
             requirements.txt
             requirements-dev.txt
 
-      # TA-Lib ships a C library its Python wheel links against; without it
-      # `import talib` fails and pyright reports reportMissingImports across the
-      # indicator stack. Install the C library before the pip step.
-      - name: Install TA-Lib C library
-        run: |
-          curl -sSL https://github.com/ta-lib/ta-lib/releases/download/v0.6.4/ta-lib_0.6.4_amd64.deb -o ta-lib.deb
-          sudo dpkg -i ta-lib.deb
+      # TA-Lib needs no system package: ta_lib >= 0.7 wheels bundle the C library.
 
       # pyrightconfig.json points at `.venv`, and the mypy=0 / pyright=0 results
       # were verified in exactly such a venv. Recreate it here so both checkers
