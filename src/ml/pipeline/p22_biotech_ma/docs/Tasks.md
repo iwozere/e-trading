@@ -883,6 +883,16 @@ use in the code/config; this section exists so they're all in one place to walk 
   not attributed (MacroGenics/ImmunoGen, Akari/Celsus); GENETIC-type interventions (gene therapy)
   are not asset candidates; the raw zone names payloads by content hash, so two companies with
   byte-identical hit lists share one manifest.
+- **ADDED 2026-11-09: backtest with every lookahead removed + learned ranking.** With trials point-in-time
+  the composite fell to lift@50 1.00 (random); `naive_informed` 1.52. Alone, `target_asset_quality` ranks
+  above random (1.28); `financial_attractiveness` (0.74), `friction_penalty` (0.34) and `strategic_fit`
+  (0.75, 5% coverage) rank below it; `acquirer_pressure` has no values. Companies with no market cap were
+  acquired 13% of the time against 6.5% (price history lost for later-delisted names), a leak for any fitted
+  model. Added the walk-forward `learned` ranking (`backtest/learned.py`, price features median-filled).
+  Offline replay on the 2026-11-09 `scores.csv` (75 snapshots): learned lift@25/50/200 1.24/1.62/1.34
+  against naive 1.33/1.53/1.31 and the composite 0.81/0.95/1.07 — on par with the baseline, not ahead
+  of it, so live scoring keeps the composite. Next: fill pre-2021 market caps for delisted names (step 2),
+  then Block A from SEC XBRL (step 3).
 - **ADDED 2026-11-08: Block B trials point-in-time.** Second backtest (Blocks C/E now covered) barely moved:
   lift@50 1.30, precision@25 0.086, recall@200 1.14×, `naive_informed` still ahead (1.47). Trials are now
   filtered to those first posted (or started) by `as_of` (migration 018, `start_date`/`first_posted_date`,

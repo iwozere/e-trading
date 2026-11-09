@@ -385,7 +385,12 @@ because trial linkage only covers single-intervention trials.
   Random is reported as its exact expectation (precision = base rate, recall = k/N), not a sampled shuffle.
 - **Metrics** are pooled over snapshots (sum of hits over sum of slots), for all names and for Tier 0
   names. `precision@k` divides by k even when a ranking is shorter than k.
-- **No embargo:** the spec's 24-month embargo separates training from test; Phase 1 fits nothing.
+- **Embargo:** the composite fits nothing. The `learned` ranking (2026-11-09, `backtest/learned.py`) is a
+  gradient-boosted classifier on the raw features, trained for each snapshot only on earlier rows whose
+  24-month label window had closed. It exists only once 200 training positives have accumulated, so
+  `metrics_learned_window.csv` pools every ranking over just those snapshots for a fair comparison.
+  `ev_to_cash` and `size_band` get the training median when missing: missing market cap means the price
+  history was lost because the company later delisted, and those names were acquired twice as often.
 - **Return labels** for M7: `upfront / close(as_of) - 1`, the close rescaled to the announcement's
   share basis, CVRs at zero (`p22_cvr_policy.yaml`), None for price-quality suspects.
 - **Inherited lookahead gaps:** trials are not bitemporal (phases and completion dates are today's),

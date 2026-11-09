@@ -14,12 +14,17 @@ For each monthly snapshot `as_of`:
    catalyst-proximity (`baselines`), and each composite block alone (`block:<name>`, attribution only);
    random is reported as its exact expectation. Every scored target is also kept as one row of
    `score_rows` (block scores, raw features, label) for offline analysis.
-4. **Metrics** at each k, for all names and separately for Tier 0 names (spec §9: Tier 0 is the
+4. **Learned ranking** (`learned`, 2026-11-09): the same raw features ranked by a model trained
+   only on earlier snapshots whose 24-month labels were complete (`backtest/learned.py`). It exists
+   only once enough such snapshots have accumulated, so every ranking is also pooled separately over
+   just those snapshots (`learned_window`) for a like-for-like comparison.
+5. **Metrics** at each k, for all names and separately for Tier 0 names (spec §9: Tier 0 is the
    honest measure of Blocks A–F), pooled over snapshots (`metrics`).
 
 Snapshots whose 24-month label window runs past `labels_complete_through` are skipped (censored).
-The spec's 24-month embargo (§5.5, §8.4) separates training from test data; Phase 1 has nothing
-fitted, so every snapshot is out-of-sample and no embargo applies until the M8 model.
+The spec's 24-month embargo (§5.5, §8.4) separates training from test data: the composite has
+nothing fitted, and the learned ranking trains only on rows at least 24 months older than the
+snapshot it ranks.
 
 Known lookahead gaps inherited from the feature store, not introduced here: trials are read as of
 their first-posted date, but each trial's phase and primary completion date are today's values; and
@@ -39,6 +44,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p22_biotech_ma.backtest import baselines
 from src.ml.pipeline.p22_biotech_ma.backtest.labels import CvrPolicy, DealLabels, add_months, is_censored, return_labels
+from src.ml.pipeline.p22_biotech_ma.backtest.learned import LearnedParams, WalkForwardRanker, rank_by_probability
 from src.ml.pipeline.p22_biotech_ma.backtest.metrics import DEFAULT_KS, MetricsTable
 from src.ml.pipeline.p22_biotech_ma.features import block_b, block_c
 from src.ml.pipeline.p22_biotech_ma.features.context import FeatureContext
@@ -51,6 +57,7 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 BLOCK_RANKING_PREFIX = "block:"
+LEARNED_RANKING = "learned"
 
 
 @dataclass(frozen=True)
@@ -70,6 +77,7 @@ class BacktestResult:
 
     all_names: MetricsTable
     tier0: MetricsTable
+    learned_window: MetricsTable
     snapshots: List[Dict[str, Any]] = field(default_factory=list)
     return_rows: List[Dict[str, Any]] = field(default_factory=list)
     score_rows: List[Dict[str, Any]] = field(default_factory=list)
@@ -206,6 +214,7 @@ def run_backtest(
     acquirers: Sequence[AcquirerConfig],
     cvr_policy: CvrPolicy,
     on_snapshot: Optional[Callable[[Dict[str, Any]], None]] = None,
+    learned_params: Optional[LearnedParams] = None,
 ) -> BacktestResult:
     """
     Walk every snapshot in `window` and pool the metrics.
@@ -219,8 +228,11 @@ def run_backtest(
         acquirers: Parsed `p22_acquirers.yaml`.
         cvr_policy: Parsed `p22_cvr_policy.yaml`, for the return labels.
         on_snapshot: Called with each snapshot's summary row (progress logging).
+        learned_params: Settings for the learned ranking (defaults when None).
     """
-    result = BacktestResult(all_names=MetricsTable(ks=window.ks), tier0=MetricsTable(ks=window.ks))
+    result = BacktestResult(all_names=MetricsTable(ks=window.ks), tier0=MetricsTable(ks=window.ks),
+                            learned_window=MetricsTable(ks=window.ks))
+    ranker = WalkForwardRanker(params=learned_params or LearnedParams())
     dates = snapshot_dates(window)
     if not dates:
         _logger.warning("No uncensored snapshots between %s and %s (labels complete through %s)",
@@ -233,10 +245,19 @@ def run_backtest(
         snap = run_snapshot(repo, as_of, ciks, labels, scoring_config, acquirers)
         targets, positives = snap["targets"], snap["positives"]
         tier0_ids = snap["tier0_ids"]
+        rows = score_rows_for_snapshot(as_of, snap["rows"], snap["features"], positives, snap["pe_positives"])
+        probabilities = ranker.predict(as_of, rows)
+        ranker.add(rows)
+        if probabilities is not None:
+            snap["rankings"][LEARNED_RANKING] = rank_by_probability(probabilities)
+            snap["tier0_rankings"][LEARNED_RANKING] = rank_by_probability(probabilities, tier0_ids)
+            _add_rankings(result.learned_window, snap["rankings"], positives, len(targets))
+            for row in rows:
+                row["learned_p"] = probabilities.get(row["company_id"])
         _add_rankings(result.all_names, snap["rankings"], positives, len(targets))
         _add_rankings(result.tier0, snap["tier0_rankings"], positives & tier0_ids, len(tier0_ids))
         result.return_rows.extend(return_labels(repo, labels, sorted(positives), as_of, cvr_policy))
-        result.score_rows.extend(score_rows_for_snapshot(as_of, snap["rows"], snap["features"], positives, snap["pe_positives"]))
+        result.score_rows.extend(rows)
 
         top50 = set(snap["rankings"]["model"][:50])
         summary = {
@@ -249,6 +270,7 @@ def run_backtest(
             "positives": len(positives),
             "pe_positives": len(snap["pe_positives"]),
             "model_hits_top50": len(top50 & positives),
+            "learned_hits_top50": len(set(snap["rankings"][LEARNED_RANKING][:50]) & positives) if probabilities is not None else None,
             **{f"excluded_{k}": v for k, v in snap["excluded"].items()},
         }
         result.snapshots.append(summary)

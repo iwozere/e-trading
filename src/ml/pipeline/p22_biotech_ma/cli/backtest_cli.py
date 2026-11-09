@@ -8,7 +8,8 @@ P22 — walk-forward backtest CLI (spec §0.3, §8.4, M6). Human-run, read-only,
 `--labels-through` is the date the deal review is complete up to; snapshots whose 24-month window
 runs past it are skipped. Until the historical candidate queue is reviewed, positives are missing
 and every lift is understated. Writes `results/p22_biotech_ma/YYYY-MM-DD/backtest/`:
-`metrics_all.csv`, `metrics_tier0.csv`, `snapshots.csv`, `return_labels.csv`, `summary.json`.
+`metrics_all.csv`, `metrics_tier0.csv`, `metrics_learned_window.csv` (every ranking over only the
+snapshots the learned model ranked), `snapshots.csv`, `return_labels.csv`, `scores.csv`, `summary.json`.
 Needs the DERA quarters in the raw zone (`run_sec_universe_ingest.py`).
 """
 
@@ -62,12 +63,12 @@ def _metric(rows: Sequence[Dict[str, Any]], ranking: str, k: int, key: str) -> O
     return None
 
 
-def success_criteria(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
-    """Spec §0.3 checks for the model, plus its lift@50 against naive-informed (the bar that matters)."""
-    lift50 = _metric(rows, "model", 50, "lift")
-    precision25 = _metric(rows, "model", 25, "precision")
-    recall200 = _metric(rows, "model", 200, "recall")
-    random_recall200 = _metric(rows, "model", 200, "random_recall")
+def success_criteria(rows: Sequence[Dict[str, Any]], ranking: str = "model") -> Dict[str, Any]:
+    """Spec §0.3 checks for `ranking`, plus its lift@50 against naive-informed (the bar that matters)."""
+    lift50 = _metric(rows, ranking, 50, "lift")
+    precision25 = _metric(rows, ranking, 25, "precision")
+    recall200 = _metric(rows, ranking, 200, "recall")
+    random_recall200 = _metric(rows, ranking, 200, "random_recall")
     naive_lift50 = _metric(rows, "naive_informed", 50, "lift")
     recall_ratio = recall200 / random_recall200 if recall200 is not None and random_recall200 else None
     return {
@@ -98,8 +99,10 @@ def write_results(result: BacktestResult, out_dir: Path, meta: Dict[str, Any]) -
     """Write the CSVs and summary.json; returns the summary."""
     out_dir.mkdir(parents=True, exist_ok=True)
     all_rows, tier0_rows = result.all_names.as_rows(), result.tier0.as_rows()
+    window_rows = result.learned_window.as_rows()
     _write_csv(out_dir / "metrics_all.csv", all_rows)
     _write_csv(out_dir / "metrics_tier0.csv", tier0_rows)
+    _write_csv(out_dir / "metrics_learned_window.csv", window_rows)
     _write_csv(out_dir / "snapshots.csv", result.snapshots)
     _write_csv(out_dir / "return_labels.csv", result.return_rows)
     _write_csv(out_dir / "scores.csv", result.score_rows)
@@ -108,14 +111,18 @@ def write_results(result: BacktestResult, out_dir: Path, meta: Dict[str, Any]) -
         "snapshots": len(result.snapshots),
         "criteria_all_names": success_criteria(all_rows),
         "criteria_tier0": success_criteria(tier0_rows),
+        "criteria_learned_window": {name: success_criteria(window_rows, name) for name in ("learned", "model")},
         "metrics_all": all_rows,
         "metrics_tier0": tier0_rows,
+        "metrics_learned_window": window_rows,
     }
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2, default=str), encoding="utf-8")
     _log_table("Backtest — all names", all_rows)
     _log_table("Backtest — Tier 0 names (spec §9: the honest measure of Blocks A–F)", tier0_rows)
+    _log_table("Backtest — snapshots ranked by the learned model only (like-for-like)", window_rows)
     _logger.info("Success criteria, all names: %s", summary["criteria_all_names"])
     _logger.info("Success criteria, Tier 0: %s", summary["criteria_tier0"])
+    _logger.info("Success criteria, learned window: %s", summary["criteria_learned_window"])
     return summary
 
 

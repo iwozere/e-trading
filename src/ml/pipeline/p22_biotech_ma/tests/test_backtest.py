@@ -269,6 +269,8 @@ def test_run_backtest_keeps_later_acquired_inactive_company_and_drops_pending(mo
     assert naive["hits"] == 1  # tie on phase/runway -> company_id order puts 1 first
     assert result.return_rows == [{"company_id": 1}]
     assert [(r["company_id"], r["positive"]) for r in result.score_rows] == [(1, 1), (2, 0)]
+    assert result.learned_window.as_rows() == []  # one snapshot: no 24-month-old training rows yet
+    assert all("learned_p" not in r for r in result.score_rows)
     block_names = {r["ranking"] for r in result.all_names.as_rows()} - {"model", "naive_informed", "catalyst_proximity"}
     assert block_names == {harness.BLOCK_RANKING_PREFIX + b for b in load_scoring_config().composite}
 
