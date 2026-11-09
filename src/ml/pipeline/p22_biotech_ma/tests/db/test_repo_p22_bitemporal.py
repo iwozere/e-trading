@@ -294,6 +294,27 @@ def test_collapse_repeated_facts_merges_daily_repeats_keeps_changes(db_session) 
     assert repo.collapse_repeated_facts(metric="is_foreign_domiciled", source_id="sec_submissions") == 0
 
 
+def test_duplicate_financial_facts_counted_deleted_and_keys_listed(db_session) -> None:
+    repo = P22Repo(db_session)
+    company_id = repo.upsert_company(cik="0000000064", name="Dup Fact Inc", role="target")
+    _, before = repo.count_duplicate_financial_facts()
+    for _run in range(3):  # three daily runs re-writing the same two-fact history
+        for known, value in [(datetime(2024, 5, 1, tzinfo=timezone.utc), 100.0), (datetime(2024, 8, 1, tzinfo=timezone.utc), 90.0)]:
+            repo.upsert_financial_fact_bitemporal(company_id=company_id, metric="cash_and_equivalents", value=value,
+                                                  known_from=known, source_id="accn", period_end=known.date())
+    _, duplicates = repo.count_duplicate_financial_facts()
+    assert duplicates - before == 4
+
+    assert repo.delete_duplicate_financial_facts() == duplicates
+    facts = repo.get_financial_facts_as_of(company_id, "cash_and_equivalents", date(2025, 1, 1))
+    assert [float(f["value"]) for f in facts] == [90.0, 100.0]
+    open_fact = repo.get_open_financial_fact(company_id, "cash_and_equivalents")
+    assert open_fact is not None and float(open_fact["value"]) == 90.0  # the last run's chain is kept
+
+    keys = repo.list_financial_fact_keys(company_id)
+    assert ("cash_and_equivalents", date(2024, 5, 1), datetime(2024, 5, 1, tzinfo=timezone.utc), 100.0, "accn") in keys
+
+
 def test_get_open_financial_fact_returns_only_the_open_row(db_session) -> None:
     repo = P22Repo(db_session)
     company_id = repo.upsert_company(cik="0000000062", name="Open Fact Inc", role="target")

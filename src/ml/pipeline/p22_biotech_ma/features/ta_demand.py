@@ -12,6 +12,8 @@ About 60% of target assets do have a classified therapeutic area, so these featu
   the area is on the buy side).
 - `ta_deal_heat_24m` — strategic acquisitions announced in the 24 months up to `as_of` whose target's
   lead area, as of its announcement, was the same (deals come in waves by area).
+- `ta_acquirer_revenue_growth` — median latest annual revenue growth of the acquirers present in the
+  area (Block A's pressure proxy, `block_a.revenue_growth_1y`): buyers whose growth is stalling.
 
 Each is `None` when the target's lead area is unknown. Everything reads trials public by `as_of` (or
 by the past deal's announcement date), and only deals announced by `as_of`, so a backtest snapshot
@@ -23,10 +25,11 @@ from __future__ import annotations
 
 import sys
 from collections import Counter
+from statistics import median
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -91,6 +94,7 @@ def ta_demand_features(
     acquirer_phase3_by_area: Mapping[int, Mapping[str, int]],
     as_of: date,
     deal_history: Optional[DealAreaHistory],
+    acquirer_growth: Optional[Mapping[int, Optional[float]]] = None,
 ) -> Dict[str, Optional[float]]:
     """
     The three features for one target whose lead area is `area`.
@@ -100,12 +104,16 @@ def ta_demand_features(
         acquirer_phase3_by_area: `{acquirer_id: {area: Phase III asset count}}` as of `as_of`.
         as_of: Snapshot date.
         deal_history: Past deals; None when not available (deal heat is then None).
+        acquirer_growth: `{acquirer_id: latest annual revenue growth or None}` as of `as_of`.
     """
     if area is None:
-        return {"ta_acquirer_demand": None, "ta_acquirer_phase3_assets": None, "ta_deal_heat_24m": None}
-    counts: List[int] = [by_area.get(area, 0) for by_area in acquirer_phase3_by_area.values()]
+        return {"ta_acquirer_demand": None, "ta_acquirer_phase3_assets": None, "ta_deal_heat_24m": None,
+                "ta_acquirer_revenue_growth": None}
+    present = [cid for cid, by_area in acquirer_phase3_by_area.items() if by_area.get(area, 0) > 0]
+    growth = sorted(g for cid in present if (g := (acquirer_growth or {}).get(cid)) is not None)
     return {
-        "ta_acquirer_demand": float(sum(1 for c in counts if c > 0)),
-        "ta_acquirer_phase3_assets": float(sum(counts)),
+        "ta_acquirer_demand": float(len(present)),
+        "ta_acquirer_phase3_assets": float(sum(by_area.get(area, 0) for by_area in acquirer_phase3_by_area.values())),
         "ta_deal_heat_24m": deal_history.heat(area, as_of) if deal_history is not None else None,
+        "ta_acquirer_revenue_growth": float(median(growth)) if growth else None,
     }

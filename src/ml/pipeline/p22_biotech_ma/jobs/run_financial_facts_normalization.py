@@ -24,8 +24,10 @@ from src.data.db.services.database_service import DatabaseService
 from src.data.pipeline.dependency_status import deferred_result, require_dependencies_or_defer
 from src.ml.pipeline.p22_biotech_ma.ingest import raw_zone
 from src.ml.pipeline.p22_biotech_ma.ingest.financial_facts import (
+    ANNUAL_GROWTH_TAG_MAP,
     DURATION_DELTA_TAG_MAP,
     FACT_TAG_MAP,
+    extract_annual_growth_series,
     extract_fact_series,
     extract_quarterly_delta_series,
     write_financial_facts,
@@ -49,6 +51,7 @@ def run() -> dict:
         return {"ciks_attempted": 0, "ciks_matched": 0, "facts_written": 0}
 
     ciks_matched = 0
+    facts_seen = 0
     facts_written = 0
 
     db_service = DatabaseService()
@@ -63,18 +66,18 @@ def run() -> dict:
                 _logger.warning("No resolved p22_company for CIK %s — skipping (run run_entity_resolution.py?)", cik)
                 continue
             ciks_matched += 1
+            company_id = company["company_id"]
+            existing = uow.p22.list_financial_fact_keys(company_id)
 
-            for metric in FACT_TAG_MAP:
-                facts = extract_fact_series(companyfacts, cik, metric)
-                if facts:
-                    facts_written += write_financial_facts(company["company_id"], facts, uow.p22)
+            series = [extract_fact_series(companyfacts, cik, metric) for metric in FACT_TAG_MAP]
+            series += [extract_quarterly_delta_series(companyfacts, cik, metric) for metric in DURATION_DELTA_TAG_MAP]
+            series += [extract_annual_growth_series(companyfacts, cik, metric) for metric in ANNUAL_GROWTH_TAG_MAP]
+            for facts in series:
+                facts_seen += len(facts)
+                facts_written += write_financial_facts(company_id, facts, uow.p22, existing)
 
-            for metric in DURATION_DELTA_TAG_MAP:
-                delta_facts = extract_quarterly_delta_series(companyfacts, cik, metric)
-                if delta_facts:
-                    facts_written += write_financial_facts(company["company_id"], delta_facts, uow.p22)
-
-    summary = {"ciks_attempted": len(companyfacts_by_cik), "ciks_matched": ciks_matched, "facts_written": facts_written}
+    summary = {"ciks_attempted": len(companyfacts_by_cik), "ciks_matched": ciks_matched,
+               "facts_seen": facts_seen, "facts_written": facts_written}
     _logger.info("Financial-facts normalization complete: %s", summary)
     return summary
 

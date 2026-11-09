@@ -53,6 +53,7 @@ LEARNED_FEATURES = (
     "f_ta_acquirer_demand",
     "f_ta_acquirer_phase3_assets",
     "f_ta_deal_heat_24m",
+    "f_ta_acquirer_revenue_growth",
 )
 # Need a market cap; missing mostly means "price history lost because the company later exited".
 PRICE_FEATURES = frozenset({"f_ev_to_cash", "f_size_band"})

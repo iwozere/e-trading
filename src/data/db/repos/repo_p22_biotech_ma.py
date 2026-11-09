@@ -14,9 +14,9 @@ see docs/Design.md for why that invariant matters.
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
-from sqlalchemy import ColumnElement, delete, func, select, update
+from sqlalchemy import ColumnElement, delete, func, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -381,6 +381,51 @@ class P22Repo:
             ))
         self.session.flush()
         return len(history)
+
+    def list_financial_fact_keys(self, company_id: int) -> Set[Tuple[str, Optional[date], datetime, Optional[float], str]]:
+        """
+        `(metric, period_end, known_from, value, source_id)` of every stored fact for `company_id`, so a
+        normalizer that re-reads a filer's whole history each day writes only the facts it lacks.
+        """
+        rows = self.session.execute(
+            select(P22FinancialFact.metric, P22FinancialFact.period_end, P22FinancialFact.known_from,
+                   P22FinancialFact.value, P22FinancialFact.source_id)
+            .where(P22FinancialFact.company_id == company_id)
+        ).all()
+        return {(m, pe, kf, float(v) if v is not None else None, src) for m, pe, kf, v, src in rows}
+
+    def count_duplicate_financial_facts(self) -> Tuple[int, int]:
+        """`(total rows, rows delete_duplicate_financial_facts would delete)`."""
+        total, distinct = self.session.execute(text("""
+            SELECT count(*), count(DISTINCT (company_id, metric, period_end, known_from, value, source_id))
+            FROM p22_financial_fact
+        """)).one()
+        return int(total), int(total) - int(distinct)
+
+    def delete_duplicate_financial_facts(self) -> int:
+        """
+        Delete rows that repeat another row's `(company_id, metric, period_end, known_from, value,
+        source_id)`, keeping the newest `fact_id` of each group. Until 2026-11-09 the daily XBRL
+        normalizer re-inserted every company's full history on every run; each run wrote one complete
+        `valid_from`/`valid_to` chain, so keeping the newest copies keeps the last run's chain and its
+        open row. As-of reads are unchanged: the copies share `known_from` and value.
+
+        Returns:
+            The number of rows deleted.
+        """
+        result = self.session.execute(text("""
+            DELETE FROM p22_financial_fact f
+            USING (
+                SELECT fact_id, row_number() OVER (
+                    PARTITION BY company_id, metric, period_end, known_from, value, source_id
+                    ORDER BY fact_id DESC
+                ) AS rn
+                FROM p22_financial_fact
+            ) d
+            WHERE f.fact_id = d.fact_id AND d.rn > 1
+        """))
+        self.session.flush()
+        return int(getattr(result, "rowcount", 0) or 0)
 
     def get_open_financial_fact(self, company_id: int, metric: str) -> Optional[Dict[str, Any]]:
         """The open row (`valid_to IS NULL`) for (company_id, metric), or `None` when there is none."""

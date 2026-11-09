@@ -11,6 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p22_biotech_ma.ingest.financial_facts import (
+    extract_annual_growth_series,
     DURATION_DELTA_TAG_MAP,
     FACT_TAG_MAP,
     NormalizedFact,
@@ -268,3 +269,65 @@ def test_write_financial_facts_calls_repo_in_known_from_order():
     assert calls[1].kwargs["source_id"] == "B"
     assert calls[0].kwargs["company_id"] == 7
     assert calls[0].kwargs["valid_from"] == date(2024, 3, 31)
+
+
+def _fy(start: str, end: str, val: float, filed: str, accn: str = "0000000000-24-000001") -> dict:
+    return {"start": start, "end": end, "val": val, "filed": filed, "accn": accn, "form": "10-K", "fp": "FY"}
+
+
+def _revenue_facts(taxonomy: str, tag: str, unit: str, entries: list) -> dict:
+    return {"facts": {taxonomy: {tag: {"units": {unit: entries}}}}}
+
+
+def test_extract_annual_growth_series_uses_full_years_and_prior_year_comparative():
+    facts = _revenue_facts("us-gaap", "Revenues", "USD", [
+        _fy("2022-01-01", "2022-12-31", 100.0, "2023-02-20"),
+        _fy("2023-01-01", "2023-12-31", 120.0, "2024-02-21"),
+        _fy("2022-01-01", "2022-12-31", 100.0, "2024-02-21"),     # comparative re-report, ignored
+        _fy("2023-10-01", "2023-12-31", 35.0, "2024-02-21"),      # a quarter, not a full year
+        _fy("2024-01-01", "2024-12-31", 90.0, "2025-02-19"),
+    ])
+    growth = extract_annual_growth_series(facts, "320193", "revenue_growth_1y")
+    assert [(f.period_end, round(f.value, 4)) for f in growth] == [(date(2023, 12, 31), 0.2), (date(2024, 12, 31), -0.25)]
+    assert growth[0].known_from == datetime(2024, 2, 21, tzinfo=timezone.utc)
+    assert growth[0].unit == "pure"
+
+
+def test_extract_annual_growth_series_never_mixes_tags_or_currencies():
+    facts = {"facts": {
+        "us-gaap": {"Revenues": {"units": {"USD": [_fy("2022-01-01", "2022-12-31", 100.0, "2023-02-20")]}},
+                    "RevenueFromContractWithCustomerExcludingAssessedTax": {"units": {"USD": [
+                        _fy("2022-01-01", "2022-12-31", 80.0, "2023-02-20"),
+                        _fy("2023-01-01", "2023-12-31", 88.0, "2024-02-20")]}}},
+        "ifrs-full": {"Revenue": {"units": {"DKK": [
+            _fy("2022-01-01", "2022-12-31", 1000.0, "2023-02-01"),
+            _fy("2023-01-01", "2023-12-31", 1500.0, "2024-02-01")]}}},
+    }}
+    growth = extract_annual_growth_series(facts, "1", "revenue_growth_1y")
+    # Revenues has no 2023 value, so the next tag in priority answers 2023, from its own two years.
+    assert [(f.period_end, round(f.value, 4)) for f in growth] == [(date(2023, 12, 31), 0.1)]
+
+
+def test_extract_annual_growth_series_skips_non_positive_prior_year():
+    facts = _revenue_facts("us-gaap", "Revenues", "USD", [
+        _fy("2022-01-01", "2022-12-31", 0.0, "2023-02-20"),
+        _fy("2023-01-01", "2023-12-31", 5.0, "2024-02-20"),
+    ])
+    assert extract_annual_growth_series(facts, "1", "revenue_growth_1y") == []
+
+
+def test_extract_annual_growth_series_unknown_metric_raises():
+    with pytest.raises(ValueError):
+        extract_annual_growth_series({}, "1", "nope")
+
+
+def test_write_financial_facts_skips_facts_already_stored():
+    repo = MagicMock()
+    stored = NormalizedFact(metric="cash_and_equivalents", value=100.0, unit="USD", period_end=date(2024, 3, 31),
+                            known_from=datetime(2024, 5, 1, tzinfo=timezone.utc), source_id="A", source_url="")
+    new = NormalizedFact(metric="cash_and_equivalents", value=90.0, unit="USD", period_end=date(2024, 6, 30),
+                         known_from=datetime(2024, 8, 1, tzinfo=timezone.utc), source_id="B", source_url="")
+    existing = {("cash_and_equivalents", date(2024, 3, 31), datetime(2024, 5, 1, tzinfo=timezone.utc), 100.0, "A")}
+
+    assert write_financial_facts(7, [stored, new], repo, existing) == 1
+    assert [c.kwargs["source_id"] for c in repo.upsert_financial_fact_bitemporal.call_args_list] == ["B"]

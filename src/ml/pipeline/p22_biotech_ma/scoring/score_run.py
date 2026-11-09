@@ -72,6 +72,7 @@ _TARGET_FEATURES = {
 _ACQUIRER_FEATURES = {
     "revenue_at_risk_3y": block_a.revenue_at_risk_3y,
     "revenue_at_risk_5y": block_a.revenue_at_risk_5y,
+    "revenue_growth_1y": block_a.revenue_growth_1y,
 }
 
 
@@ -215,7 +216,6 @@ def score_universe(
     resolved = resolve_acquirers(acquirers, companies, as_of)
     acquirer_profiles = [build_acquirer_profile(repo, ctx, cfg, cid) for cfg, cid in resolved]
     acquirer_ids = {cid for _, cid in resolved}
-    acquirer_phase3 = {p.company_id: p.phase3_by_ta for p in acquirer_profiles}
 
     excluded: Dict[str, int] = {}
     if target_ids is None:
@@ -226,6 +226,8 @@ def score_universe(
     # Block A per acquirer, rank-percentiled across the acquirer universe.
     acquirer_features = {cid: {name: fn(cid, as_of, ctx) for name, fn in _ACQUIRER_FEATURES.items()} for cid in acquirer_ids}
     pressure_by_acquirer = block_scores(acquirer_features, config.blocks.get("acquirer_pressure", {}))
+    acquirer_phase3 = {p.company_id: p.phase3_by_ta for p in acquirer_profiles}
+    acquirer_growth = {cid: f.get("revenue_growth_1y") for cid, f in acquirer_features.items()}
 
     raw_features: Dict[int, Dict[str, Optional[float]]] = {}
     block_inputs: Dict[str, Dict[int, Dict[str, Optional[float]]]] = {block: {} for block in _TARGET_FEATURES}
@@ -245,7 +247,7 @@ def score_universe(
         dilution[company_id] = block_c.dilution_risk(company_id, as_of, ctx)
         features["dilution_risk"] = dilution[company_id]
         area = lead_therapeutic_area(ctx.get_trials_for_company(company_id))
-        features.update(ta_demand_features(area, acquirer_phase3, as_of, deal_history))
+        features.update(ta_demand_features(area, acquirer_phase3, as_of, deal_history, acquirer_growth))
         raw_features[company_id] = features
 
         pairs = best_fits(acquirer_profiles, build_target_profile(repo, ctx, company_id), config)

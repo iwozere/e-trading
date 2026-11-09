@@ -146,6 +146,19 @@ def revenue_at_risk_5y(company_id: int, as_of: date, ctx: FeatureContext) -> Opt
     return _revenue_at_risk(company_id, as_of, ctx, window_months=60)
 
 
+@register_feature("block_a.revenue_growth_1y")
+def revenue_growth_1y(company_id: int, as_of: date, ctx: FeatureContext) -> Optional[float]:
+    """
+    Latest fiscal year's revenue growth known on `as_of` (`ingest/financial_facts.py`
+    `extract_annual_growth_series`, 2026-11-09). A pressure proxy that exists historically: the spec's
+    revenue-at-risk needs per-product revenue and patent expiries, and the Orange Book lists only
+    unexpired patents, so a past snapshot cannot see the cliffs that have since passed. Slower growth
+    means more pressure to buy.
+    """
+    del as_of  # ctx is already as-of-bound
+    return ctx.get_latest_fact(company_id, "revenue_growth_1y")
+
+
 @register_feature("block_a.cash_capacity")
 def cash_capacity(company_id: int, as_of: date, ctx: FeatureContext) -> Optional[float]:
     """

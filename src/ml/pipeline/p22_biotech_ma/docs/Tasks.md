@@ -908,6 +908,20 @@ use in the code/config; this section exists so they're all in one place to walk 
   important: the Orange Book lists only unexpired patents, so a historical snapshot cannot see the
   patents that expired since — patent-cliff counts are usable live, not in the backtest. Step 3b therefore
   builds acquirer pressure from SEC XBRL only (revenue growth, cash capacity), which is point-in-time.
+- **ADDED 2026-11-09: step 3b, acquirer pressure from SEC XBRL revenue growth.** `revenue_growth_1y`
+  (`financial_facts.extract_annual_growth_series`: full-year revenue over the prior year's, same tag and
+  currency, known from the later filing date) for 19 of 25 roster acquirers (13 us-gaap filers, AstraZeneca,
+  GSK, Novo Nordisk, Takeda on `ifrs-full:Revenue`, Novartis and Sanofi on `RevenueFromSaleOfGoods`; 8-18
+  years each). Roche, Bayer, Ipsen, Astellas, Daiichi Sankyo and CSL file no XBRL. Read by
+  `block_a.revenue_growth_1y` (Block A `acquirer_pressure`, direction lower) and per target as
+  `ta_acquirer_revenue_growth` (median over the acquirers present in the lead area). Cash capacity left out:
+  cash tags stop for Gilead (2022) and Biogen (2019) and IFRS debt tags are not mapped.
+- **FIXED 2026-11-09: Financial Facts job re-inserted every fact every day.** Pi logs showed ~169,000 facts
+  written per weekday run: the job writes each company's full XBRL history and
+  `upsert_financial_fact_bitemporal` always inserts. Reads stayed correct (same `known_from` and value).
+  The job now skips facts already stored (`P22Repo.list_financial_fact_keys`; summary adds `facts_seen`),
+  and `cli/dedupe_facts_cli.py` deletes the existing copies, keeping the newest of each (the last run's
+  chain and open row). On the Pi: `dedupe_facts_cli --dry-run`, then without it.
 - **ADDED 2026-11-08: Block B trials point-in-time.** Second backtest (Blocks C/E now covered) barely moved:
   lift@50 1.30, precision@25 0.086, recall@200 1.14×, `naive_informed` still ahead (1.47). Trials are now
   filtered to those first posted (or started) by `as_of` (migration 018, `start_date`/`first_posted_date`,

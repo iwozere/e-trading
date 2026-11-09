@@ -18,6 +18,7 @@ from src.ml.pipeline.p22_biotech_ma.features.block_a import (
     pipeline_gap_by_ta,
     revenue_at_risk_3y,
     revenue_at_risk_5y,
+    revenue_growth_1y,
 )
 from src.ml.pipeline.p22_biotech_ma.features.context import FeatureContext
 from src.ml.pipeline.p22_biotech_ma.tests.fake_market_repo import MarketCapFixtureMixin
@@ -220,3 +221,8 @@ def test_pipeline_gap_by_ta_real_computation():
         _COMPANY_ID, _AS_OF, ctx, assumed_peak_sales_by_ta={"oncology_solid": 100.0}
     )
     assert result == {"oncology_solid": 500.0 - 2 * 100.0}
+
+
+def test_revenue_growth_1y_reads_latest_known_fact_and_none_when_absent():
+    assert revenue_growth_1y(_COMPANY_ID, _AS_OF, _ctx({"revenue_growth_1y": -0.04})) == -0.04
+    assert revenue_growth_1y(_COMPANY_ID, _AS_OF, _ctx()) is None

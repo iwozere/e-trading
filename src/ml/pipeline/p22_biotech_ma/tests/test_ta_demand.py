@@ -65,7 +65,16 @@ def test_deal_heat_counts_same_area_deals_in_trailing_window_only():
 def test_ta_demand_features_count_acquirers_with_phase3_in_area():
     phase3 = {100: {"oncology_solid": 3, "neurology": 1}, 101: {"oncology_solid": 2}, 102: {"autoimmune": 4}}
     features = ta_demand_features("oncology_solid", phase3, date(2019, 1, 1), None)
-    assert features == {"ta_acquirer_demand": 2.0, "ta_acquirer_phase3_assets": 5.0, "ta_deal_heat_24m": None}
+    assert features == {"ta_acquirer_demand": 2.0, "ta_acquirer_phase3_assets": 5.0, "ta_deal_heat_24m": None,
+                        "ta_acquirer_revenue_growth": None}
+
+
+def test_ta_acquirer_revenue_growth_is_median_of_acquirers_present_in_area():
+    phase3 = {100: {"oncology_solid": 3}, 101: {"oncology_solid": 2}, 102: {"oncology_solid": 1}, 103: {"autoimmune": 4}}
+    growth = {100: 0.10, 101: -0.05, 102: None, 103: 0.50}  # 102 unknown, 103 is in another area
+    features = ta_demand_features("oncology_solid", phase3, date(2019, 1, 1), None, growth)
+    assert features["ta_acquirer_revenue_growth"] == 0.025
+    assert ta_demand_features("neurology", phase3, date(2019, 1, 1), None, growth)["ta_acquirer_revenue_growth"] is None
     assert set(ta_demand_features(None, phase3, date(2019, 1, 1), None).values()) == {None}
 
 

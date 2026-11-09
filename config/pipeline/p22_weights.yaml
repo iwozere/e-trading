@@ -40,6 +40,9 @@ blocks:
   acquirer_pressure:
     revenue_at_risk_3y: {weight: 0.5, direction: higher}
     revenue_at_risk_5y: {weight: 0.5, direction: higher}
+    # 2026-11-09: the only pressure input with history (SEC XBRL annual revenue); slower growth = more
+    # pressure. Revenue at risk stays empty (no per-product revenue, Orange Book holds unexpired patents only).
+    revenue_growth_1y: {weight: 0.5, direction: lower}
 
 # §4.4 fit() preference terms. DRAFT — the spec writes w1..w3 without values.
 fit_preference:

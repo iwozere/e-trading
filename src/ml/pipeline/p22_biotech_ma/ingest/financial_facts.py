@@ -37,6 +37,16 @@ filers (Moderna, Sarepta, Alnylam):
   duration) via `extract_quarterly_delta_series`, live-verified present (and cumulative-YTD-shaped,
   confirming the derivation below is actually needed) across all three filers.
 
+- `revenue_growth_1y` (2026-11-09, Block A acquirer pressure) — annual revenue over the prior year's,
+  minus 1, from `extract_annual_growth_series`. Both figures come from full-year periods (350-380 days)
+  under the same tag, so a tag switch or a reporting currency never mixes into one ratio; the value is
+  known from the filing date of the later year. Candidates in priority order, checked 2026-11-09
+  against the 25 roster acquirers' landed companyfacts: `us-gaap:Revenues`,
+  `RevenueFromContractWithCustomerExcludingAssessedTax`, `SalesRevenueNet`, `SalesRevenueGoodsNet` (13 US
+  filers), `ifrs-full:Revenue` (AstraZeneca, GSK, Novo Nordisk, Takeda) and `RevenueFromSaleOfGoods`
+  (Novartis, Sanofi). Six roster acquirers file no XBRL with the SEC (Roche, Bayer, Ipsen, Astellas,
+  Daiichi Sankyo, CSL) and get no value.
+
 **Deliberately not added this pass:** `rd_expense` (`ResearchAndDevelopmentExpense` — live-verified
 present for all three filers, easy to add) has no consumer yet (no built Block C/B feature reads
 R&D spend) — adding a metric nothing reads is speculative work with no way to test it's actually
@@ -95,7 +105,7 @@ import sys
 from dataclasses import dataclass
 from datetime import date, datetime, time, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import AbstractSet, Any, Dict, List, Optional, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -125,6 +135,23 @@ FACT_TAG_MAP: Dict[str, List[Tuple[str, str, str]]] = {
 DURATION_DELTA_TAG_MAP: Dict[str, Tuple[str, str, str]] = {
     "quarterly_opex_burn": ("us-gaap", "NetCashProvidedByUsedInOperatingActivities", "USD"),
 }
+
+# Year-over-year growth of a full-year duration concept — see `extract_annual_growth_series`. Each
+# candidate is (taxonomy, tag); every unit the tag reports in is tried, since IFRS filers report in
+# their own currency. Candidates are in priority order: the first that yields a ratio for a fiscal
+# year wins that year.
+ANNUAL_GROWTH_TAG_MAP: Dict[str, List[Tuple[str, str]]] = {
+    "revenue_growth_1y": [
+        ("us-gaap", "Revenues"),
+        ("us-gaap", "RevenueFromContractWithCustomerExcludingAssessedTax"),
+        ("us-gaap", "SalesRevenueNet"),
+        ("us-gaap", "SalesRevenueGoodsNet"),
+        ("ifrs-full", "Revenue"),
+        ("ifrs-full", "RevenueFromSaleOfGoods"),
+    ],
+}
+FULL_YEAR_MIN_DAYS = 350
+FULL_YEAR_MAX_DAYS = 380
 
 
 @dataclass(frozen=True)
@@ -298,7 +325,72 @@ def extract_quarterly_delta_series(companyfacts: Dict[str, Any], cik: str, metri
     return facts
 
 
-def write_financial_facts(company_id: int, facts: List[NormalizedFact], repo: Any) -> int:
+def _full_year_values(entries: List[Dict[str, Any]]) -> Dict[date, Dict[str, Any]]:
+    """Full-year entries by period end, earliest-filed kept (the comparative-column trap again)."""
+    by_end: Dict[date, Dict[str, Any]] = {}
+    for entry in sorted(entries, key=lambda e: e.get("filed") or ""):
+        start_raw, end_raw, filed_raw, val = entry.get("start"), entry.get("end"), entry.get("filed"), entry.get("val")
+        if start_raw is None or end_raw is None or filed_raw is None or val is None:
+            continue
+        start, end = date.fromisoformat(start_raw), date.fromisoformat(end_raw)
+        if not FULL_YEAR_MIN_DAYS <= (end - start).days <= FULL_YEAR_MAX_DAYS or end in by_end:
+            continue
+        by_end[end] = entry
+    return by_end
+
+
+def _prior_year(by_end: Dict[date, Dict[str, Any]], end: date) -> Optional[Dict[str, Any]]:
+    """The full-year entry ending 350-380 days before `end`, if any."""
+    candidates = [e for e in by_end if FULL_YEAR_MIN_DAYS <= (end - e).days <= FULL_YEAR_MAX_DAYS]
+    return by_end[max(candidates)] if candidates else None
+
+
+def extract_annual_growth_series(companyfacts: Dict[str, Any], cik: str, metric: str) -> List[NormalizedFact]:
+    """
+    Year-over-year growth (`value / prior-year value - 1`) for each fiscal year of a duration concept.
+
+    Both values come from one (tag, unit) pair; the first candidate in `ANNUAL_GROWTH_TAG_MAP` order
+    with a ratio for a fiscal year wins it. A non-positive prior-year value gives no ratio. The fact is
+    known from the later of the two values' first filing dates (normally the same 10-K/20-F, which
+    reports the prior year as a comparative column).
+
+    Raises:
+        ValueError: if `metric` isn't in `ANNUAL_GROWTH_TAG_MAP`.
+    """
+    if metric not in ANNUAL_GROWTH_TAG_MAP:
+        raise ValueError(f"Unknown annual-growth metric {metric!r}; add it to ANNUAL_GROWTH_TAG_MAP first")
+    chosen: Dict[date, NormalizedFact] = {}
+    for taxonomy, tag in ANNUAL_GROWTH_TAG_MAP[metric]:
+        units = companyfacts.get("facts", {}).get(taxonomy, {}).get(tag, {}).get("units", {})
+        for unit_entries in units.values():
+            by_end = _full_year_values(unit_entries)
+            for end, entry in by_end.items():
+                prior = _prior_year(by_end, end)
+                if end in chosen or prior is None or float(prior["val"]) <= 0:
+                    continue
+                filed = max(entry["filed"], prior["filed"])
+                accn = entry.get("accn", "")
+                chosen[end] = NormalizedFact(
+                    metric=metric,
+                    value=float(entry["val"]) / float(prior["val"]) - 1.0,
+                    unit="pure",
+                    period_end=end,
+                    known_from=datetime.combine(date.fromisoformat(filed), time.min, tzinfo=timezone.utc),
+                    source_id=accn,
+                    source_url=filing_index_url(cik, accn) if accn else "",
+                )
+    return sorted(chosen.values(), key=lambda f: f.known_from)
+
+
+FactKey = Tuple[str, Optional[date], datetime, Optional[float], str]
+
+
+def fact_key(fact: NormalizedFact) -> FactKey:
+    """`(metric, period_end, known_from, value, source_id)`, as `P22Repo.list_financial_fact_keys` returns it."""
+    return (fact.metric, fact.period_end, fact.known_from, fact.value, fact.source_id)
+
+
+def write_financial_facts(company_id: int, facts: List[NormalizedFact], repo: Any, existing: Optional[AbstractSet[FactKey]] = None) -> int:
     """
     Write a list of `NormalizedFact`s via `P22Repo.upsert_financial_fact_bitemporal`,
     in `known_from` order (re-sorted here defensively — callers should
@@ -306,10 +398,17 @@ def write_financial_facts(company_id: int, facts: List[NormalizedFact], repo: An
     correctness of this write depends entirely on chronological order, so
     this does not trust the caller).
 
+    `existing` (from `P22Repo.list_financial_fact_keys`) skips facts already stored. Every daily run
+    re-reads each filer's whole history, and before 2026-11-09 it re-inserted all of it each time.
+
     Returns:
         Number of facts written.
     """
+    written = 0
     for fact in sorted(facts, key=lambda f: f.known_from):
+        if existing is not None and fact_key(fact) in existing:
+            continue
+        written += 1
         repo.upsert_financial_fact_bitemporal(
             company_id=company_id,
             metric=fact.metric,
@@ -321,4 +420,4 @@ def write_financial_facts(company_id: int, facts: List[NormalizedFact], repo: An
             valid_from=fact.period_end,
             source_url=fact.source_url or None,
         )
-    return len(facts)
+    return written
