@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.ml.pipeline.p22_biotech_ma.config import PUBLIC_FLOAT_TO_MARKET_CAP
 from src.ml.pipeline.p22_biotech_ma.features.context import FeatureContext
 from src.ml.pipeline.p22_biotech_ma.tests.fake_market_repo import FakeMarketRepo
 
@@ -105,6 +106,26 @@ def test_get_market_cap_derives_from_close_and_shares_known_on_as_of():
 
 def test_get_market_cap_none_before_shares_are_filed():
     assert FeatureContext(as_of=date(2016, 2, 1), repo=_market_repo()).get_market_cap(7) is None
+
+
+def test_get_market_cap_falls_back_to_public_float_without_a_price():
+    repo = FakeMarketRepo()
+    repo.add_fact(8, "public_float", 100e6, period_end=date(2015, 6, 30), filed=date(2016, 3, 1))
+    assert FeatureContext(as_of=date(2016, 2, 1), repo=repo).get_market_cap(8) is None  # 10-K not filed yet
+    assert FeatureContext(as_of=date(2016, 4, 1), repo=repo).get_market_cap(8) == 100e6 * PUBLIC_FLOAT_TO_MARKET_CAP
+    assert FeatureContext(as_of=date(2017, 6, 1), repo=repo).get_market_cap(8) is None  # float too old
+
+
+def test_get_market_cap_ignores_float_tagged_in_the_wrong_unit():
+    repo = FakeMarketRepo()
+    repo.add_fact(8, "public_float", 5e15, period_end=date(2015, 6, 30), filed=date(2016, 3, 1))
+    assert FeatureContext(as_of=date(2016, 4, 1), repo=repo).get_market_cap(8) is None
+
+
+def test_get_market_cap_prefers_price_over_public_float():
+    repo = _market_repo()
+    repo.add_fact(7, "public_float", 1e6, period_end=date(2015, 6, 30), filed=date(2016, 2, 20))
+    assert FeatureContext(as_of=date(2016, 3, 1), repo=repo).get_market_cap(7) == 120e6
 
 
 def test_get_market_cap_is_cached_per_company():

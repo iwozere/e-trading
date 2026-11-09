@@ -298,6 +298,12 @@ linkage decision, `docs/Tasks.md` "Decisions needed" item 8.
   of companies whose float alone exceeds $25M drops from 3.0% (market cap alone) to 0.4%.
   The live roster (`build_universe`) still does not compute the floor; `build_universe_history`
   takes it as an injected `(cik, as_of)` callable so the function stays pure and testable.
+- **Market cap fallback = public float x 1.14** (2026-11-09, `FeatureContext.get_market_cap`). When the
+  derived market cap is rejected (no price, stale price, no/stale share count), Block A/C read the latest
+  10-K public float known on `as_of` (at most 600 days old) times 1.14, the median ratio above; floats over
+  $1T (wrong-unit tags) are ignored. On the 2026-11-09 backtest, 87% of the rows with no size band had no
+  price at all and were acquired 8.8% of the time; 88% of those had a float within two years. The size floor
+  keeps its own rule and does not use this fallback.
 
 ### Deal-label entry (M6, 2026-10-29)
 `deal_candidates.py` only names filings to read; a human enters the deal through

@@ -175,6 +175,12 @@ PUBLIC_FLOAT_MAX_AGE_DAYS: int = 600
 # usually an ADR (shares counted in ordinary shares) or a share count from before a reverse merger.
 FLOAT_CONSISTENCY_MIN_RATIO: float = 0.5
 FLOAT_CONSISTENCY_MAX_RATIO: float = 10.0
+# Market cap fallback from the 10-K public float when there is no usable price (2026-11-09): the price
+# history mostly lacks companies that later delisted, so without it a missing market cap marks the names
+# about to be acquired. Scaled by the median market cap / float ratio of the cross-check above. Floats
+# above the ceiling are filers tagging the value in the wrong unit (Sarepta, Fate, Innoviva: 1000x).
+PUBLIC_FLOAT_TO_MARKET_CAP: float = 1.14
+PUBLIC_FLOAT_MAX_VALUE_USD: float = 1e12
 
 # ---------------------------------------------------------------------------
 # yfinance — ongoing/daily current-price ingest (spec §2.0.7), 2026-09-01.

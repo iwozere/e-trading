@@ -32,7 +32,9 @@ from typing import Any, Dict, List, Optional
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.ml.pipeline.p22_biotech_ma.config import PUBLIC_FLOAT_MAX_VALUE_USD, PUBLIC_FLOAT_TO_MARKET_CAP
 from src.ml.pipeline.p22_biotech_ma.ingest.market_cap import compute_market_cap
+from src.ml.pipeline.p22_biotech_ma.ingest.price_quality import latest_public_float
 
 
 @dataclass(frozen=True)
@@ -53,11 +55,22 @@ class FeatureContext:
         Deriving here gives live and historical runs the same definition and the same guards
         (stale price, stale share count, splits); both inputs are read as of `self.as_of`.
         Cached per company because Block C asks for it several times per company.
+
+        Without a usable price or share count, falls back to the latest 10-K public float known on
+        `as_of` (at most `PUBLIC_FLOAT_MAX_AGE_DAYS` old) times `PUBLIC_FLOAT_TO_MARKET_CAP`. The price
+        history mostly lacks companies that later delisted, so leaving them unknown made "no market
+        cap" a marker of the names about to be acquired (2026-11-09 backtest: 13% vs 6.5%).
         """
         if company_id not in self._market_caps:
             result = compute_market_cap(self.repo, company_id, self.as_of)[0]
-            self._market_caps[company_id] = result.market_cap if result is not None else None
+            self._market_caps[company_id] = result.market_cap if result is not None else self._float_market_cap(company_id)
         return self._market_caps[company_id]
+
+    def _float_market_cap(self, company_id: int) -> Optional[float]:
+        public_float = latest_public_float(self.repo, company_id, self.as_of)
+        if public_float is None or public_float.value > PUBLIC_FLOAT_MAX_VALUE_USD:
+            return None
+        return public_float.value * PUBLIC_FLOAT_TO_MARKET_CAP
 
     def get_latest_fact(self, company_id: int, metric: str) -> Optional[float]:
         """

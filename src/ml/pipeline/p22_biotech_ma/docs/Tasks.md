@@ -891,8 +891,11 @@ use in the code/config; this section exists so they're all in one place to walk 
   model. Added the walk-forward `learned` ranking (`backtest/learned.py`, price features median-filled).
   Offline replay on the 2026-11-09 `scores.csv` (75 snapshots): learned lift@25/50/200 1.24/1.62/1.34
   against naive 1.33/1.53/1.31 and the composite 0.81/0.95/1.07 — on par with the baseline, not ahead
-  of it, so live scoring keeps the composite. Next: fill pre-2021 market caps for delisted names (step 2),
-  then Block A from SEC XBRL (step 3).
+  of it, so live scoring keeps the composite. Step 2: `cli/market_cap_gap_cli.py` on the Pi (3,000 sampled
+  rows with no size band): 2,603 `no_price` (8.8% positive), 148 no share count, 86 no cash, 85 stale share
+  count, 73 stale price; a public float within two years was known for 88% of the `no_price` rows. Fixed with
+  the public-float fallback in `FeatureContext.get_market_cap` (docs/Design.md "Size floor"). Needs a
+  backtest rerun. Then Block A from SEC XBRL (step 3).
 - **ADDED 2026-11-08: Block B trials point-in-time.** Second backtest (Blocks C/E now covered) barely moved:
   lift@50 1.30, precision@25 0.086, recall@200 1.14×, `naive_informed` still ahead (1.47). Trials are now
   filtered to those first posted (or started) by `as_of` (migration 018, `start_date`/`first_posted_date`,
