@@ -6,6 +6,11 @@ Runs on weekdays after Market Cap Compute, so Block C reads the day's market cap
 `results/p22_biotech_ma/YYYY-MM-DD/watchlist.csv` and `watchlist.json`, and a dossier (spec §6.2)
 per top-ranked company under `dossiers/`.
 
+When the weekly backtest job has saved a learned model (`config.LEARNED_MODEL_PATH`), every row
+also gets `rank_by_learned` and `subscores["learned"]`, and the watchlist is ordered by it (2026-11-09:
+the learned ranking beats naive-informed in the backtest, the composite does not). Dossiers stay on
+the composite top 25.
+
     python src/ml/pipeline/p22_biotech_ma/jobs/run_scoring.py [--as-of 2026-10-29] [--dry-run]
 
 `--dry-run` scores and writes the files but rolls back the database writes.
@@ -25,10 +30,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.db.services.database_service import DatabaseService
+from src.ml.pipeline.p22_biotech_ma.backtest.learned import load_model
+from src.ml.pipeline.p22_biotech_ma.config import LEARNED_MODEL_PATH
 from src.ml.pipeline.p22_biotech_ma.ingest.acquirer_config import load_acquirers
 from src.ml.pipeline.p22_biotech_ma.jobs.run_common import setup_run_logging
 from src.ml.pipeline.p22_biotech_ma.outputs.dossier import write_dossiers
 from src.ml.pipeline.p22_biotech_ma.features.ta_demand import DealAreaHistory
+from src.ml.pipeline.p22_biotech_ma.scoring.learned_live import apply_learned, by_learned_rank, learned_ranking
 from src.ml.pipeline.p22_biotech_ma.scoring.score_run import persist_score_run, score_universe
 from src.ml.pipeline.p22_biotech_ma.scoring.weights_config import config_hash, load_scoring_config
 from src.notification.logger import setup_logger
@@ -36,7 +44,7 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 _CSV_COLUMNS = [
-    "rank_by_composite", "ticker", "name", "company_id", "composite", "tier", "tier_reason", "fundamental",
+    "rank_by_learned", "learned_p", "rank_by_composite", "ticker", "name", "company_id", "composite", "tier", "tier_reason", "fundamental",
     "coverage", "likely_acquirer", "acquirer_pressure_matched", "target_asset_quality", "strategic_fit",
     "financial_attractiveness", "friction_penalty", "dilution_gate",
 ]
@@ -50,7 +58,7 @@ class _DryRunRollback(Exception):
 
 
 def write_watchlist(rows: List[Dict[str, Any]], results_dir: Path, summary: Dict[str, Any]) -> None:
-    """Spec §6.1 watchlist: CSV for eyeballing, JSON with the full subscores/contributions."""
+    """Spec §6.1 watchlist: CSV for eyeballing, JSON with the full subscores/contributions, in `rows` order."""
     with (results_dir / "watchlist.csv").open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=_CSV_COLUMNS)
         writer.writeheader()
@@ -58,6 +66,8 @@ def write_watchlist(rows: List[Dict[str, Any]], results_dir: Path, summary: Dict
             subscores = row["subscores"]
             likely = subscores.get("likely_acquirer") or {}
             writer.writerow({
+                "rank_by_learned": row.get("rank_by_learned"),
+                "learned_p": (subscores.get("learned") or {}).get("p"),
                 "rank_by_composite": row["rank_by_composite"],
                 "ticker": row["ticker"],
                 "name": row["name"],
@@ -88,7 +98,12 @@ def run(as_of: date | None = None, dry_run: bool = False) -> dict:
             deal_history = DealAreaHistory(uow.p22, uow.p22.list_deals())
             result = score_universe(uow.p22, as_of, config, acquirers, deal_history=deal_history)
             summary = dict(result.summary)
-            write_watchlist(result.rows, results_dir, summary)
+            model = load_model(LEARNED_MODEL_PATH)
+            if model is not None:
+                apply_learned(result.rows, learned_ranking(uow.p22, as_of, result.rows, model), model)
+                summary["learned_model_labels_through"] = model.labels_through.isoformat()
+            summary["learned_ranking"] = model is not None
+            write_watchlist(by_learned_rank(result.rows) if model is not None else result.rows, results_dir, summary)
             summary["run_id"] = persist_score_run(uow.p22, as_of, config, digest, result.rows)
             run_meta = {"run_id": summary["run_id"], "model_version": config.model_version, "config_hash": digest}
             summary["dossiers"] = len(write_dossiers(uow.p22, result.rows, as_of, run_meta, results_dir / "dossiers", DOSSIER_TOP_N))

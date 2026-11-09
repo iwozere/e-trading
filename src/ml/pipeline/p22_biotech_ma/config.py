@@ -207,3 +207,12 @@ DEAL_CANDIDATE_LOOKBACK_DAYS: int = 7
 # Logging / results directory
 # ---------------------------------------------------------------------------
 RESULTS_DIR = PROJECT_ROOT / "results" / "p22_biotech_ma"
+
+# ---------------------------------------------------------------------------
+# Learned ranking (2026-11-09): the weekly backtest job trains the live model and saves it here;
+# daily scoring loads it. Outside the dated folders, so scoring always finds the latest one.
+# ---------------------------------------------------------------------------
+LEARNED_MODEL_PATH = RESULTS_DIR / "models" / "learned_model.pkl"
+# Backtest window start for the weekly job (spec: 2016), and how far back its digest looks.
+BACKTEST_START_YEAR: int = 2016
+LABEL_REVIEW_DIGEST_DAYS: int = 7

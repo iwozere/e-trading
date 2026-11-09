@@ -375,7 +375,7 @@ because trial linkage only covers single-intervention trials.
 
 ### Backtest (M6, 2026-10-30)
 
-`backtest/` + `cli/backtest_cli.py`, spec §0.3/§8.4. Read-only; runs by hand.
+`backtest/` + `cli/backtest_cli.py`, spec §0.3/§8.4. Read-only; runs by hand and weekly (`jobs/run_backtest.py`).
 
 - **Universe per snapshot is point in time.** The latest DERA quarter ending on or before `as_of`
   (reporting in the last 183 days, not a SPAC), mapped to `p22_company` by CIK, then the live filters
@@ -397,6 +397,14 @@ because trial linkage only covers single-intervention trials.
   `metrics_learned_window.csv` pools every ranking over just those snapshots for a fair comparison.
   `ev_to_cash` and `size_band` get the training median when missing: missing market cap means the price
   history was lost because the company later delisted, and those names were acquired twice as often.
+- **Ties** are broken by a hash of (snapshot date, company id) (`baselines.tie_break`), never by the id
+  itself: ids are assigned in creation order and later-created companies are acquired far more often.
+- **Weekly job and live use** (2026-11-09): `jobs/run_backtest.py` (Saturday) sets `--labels-through` to
+  the day before the oldest pending deal candidate's filing, runs the backtest, trains the live learned
+  model on every row (`config.LEARNED_MODEL_PATH`) and emails the like-for-like table. `jobs/run_scoring.py`
+  loads that model and adds `rank_by_learned` (and `subscores.learned`) to every row; the watchlist is
+  ordered by it, the composite and its blocks stay as the explanation. `jobs/run_label_review_digest.py`
+  (Monday) emails the review queue, since unreviewed candidates hold the label cut-off back.
 - **Return labels** for M7: `upfront / close(as_of) - 1`, the close rescaled to the announcement's
   share basis, CVRs at zero (`p22_cvr_policy.yaml`), None for price-quality suspects.
 - **Inherited lookahead gaps:** trials are not bitemporal (phases and completion dates are today's),

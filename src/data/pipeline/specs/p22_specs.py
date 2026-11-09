@@ -188,4 +188,21 @@ SPECS: List[PluginSpec] = [
         description="M4 (spec §5.1-5.2): Phase 1 rule-based composite + tiers -> p22_score_run/p22_score + watchlist CSV/JSON.",
         depends_on=["P22 Market Cap Compute"],
     ),
+    PluginSpec(
+        name="P22 Weekly Backtest",
+        category="p22",
+        cron="0 6 * * 6",  # Saturday 06:00 UTC: no other P22 job runs on weekends; takes about an hour on the Pi
+        script_path=f"{_SCRIPT_BASE}/run_backtest.py",
+        timeout_seconds=14400,
+        description="Walk-forward backtest (labels cut off at the oldest pending deal candidate) -> trains the live "
+                    "learned model for P22 Scoring + emails lift vs baselines.",
+    ),
+    PluginSpec(
+        name="P22 Label Review Digest",
+        category="p22",
+        cron="30 7 * * 1",  # Monday 07:30 UTC, after the 06:45 Deal Candidates Ingest
+        script_path=f"{_SCRIPT_BASE}/run_label_review_digest.py",
+        timeout_seconds=600,
+        description="Weekly email of deal candidates (and other review items) waiting for review.",
+    ),
 ]

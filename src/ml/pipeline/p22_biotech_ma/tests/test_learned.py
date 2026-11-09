@@ -17,9 +17,12 @@ from src.ml.pipeline.p22_biotech_ma.backtest.learned import (
     LearnedParams,
     WalkForwardRanker,
     feature_matrix,
+    fit_final_model,
     fit_model,
+    load_model,
     price_fill_values,
     rank_by_probability,
+    save_model,
 )
 
 _SMALL = LearnedParams(min_train_positives=5, max_iter=30, min_samples_leaf=2)
@@ -91,3 +94,33 @@ def test_rank_by_probability_breaks_ties_by_hash_and_restricts():
     tied = sorted((1, 3), key=lambda c: tie_break(c, "s"))
     assert rank_by_probability(probabilities, salt="s") == [2, *tied]
     assert rank_by_probability(probabilities, {1, 3}, "s") == tied
+
+
+def test_fit_final_model_trains_only_on_complete_labels():
+    rows = _phase_driven_rows(date(2018, 1, 1)) + [_row(500 + i, date(2025, 1, 1), 1) for i in range(30)]  # 2025 rows: labels open
+    model = fit_final_model(rows, date(2026, 11, 6), _SMALL)
+    assert model is not None
+    assert model.fitted.train_rows == 60 and model.features == LEARNED_FEATURES
+    assert model.labels_through == date(2026, 11, 6)
+    assert fit_final_model(_phase_driven_rows(date(2018, 1, 1), n=9), date(2026, 11, 6), _SMALL) is None
+
+
+def test_save_and_load_model_round_trip(tmp_path):
+    model = fit_final_model(_phase_driven_rows(date(2018, 1, 1)), date(2026, 11, 6), _SMALL)
+    assert model is not None
+    path = tmp_path / "models" / "learned_model.pkl"
+    save_model(model, path)
+    loaded = load_model(path)
+    assert loaded is not None
+    rows = [_row(1, date(2026, 11, 9), 0, phase=3.0), _row(2, date(2026, 11, 9), 0, phase=1.0)]
+    assert loaded.fitted.predict(rows) == model.fitted.predict(rows)
+    assert not list(tmp_path.glob("models/*.tmp"))
+
+
+def test_load_model_ignores_missing_file_and_other_feature_lists(tmp_path):
+    assert load_model(tmp_path / "none.pkl") is None
+    model = fit_final_model(_phase_driven_rows(date(2018, 1, 1)), date(2026, 11, 6), _SMALL)
+    assert model is not None
+    model.features = ("f_phase_max",)
+    save_model(model, tmp_path / "old.pkl")
+    assert load_model(tmp_path / "old.pkl") is None

@@ -80,6 +80,26 @@ def cash_runway_months(company_id: int, as_of: date, ctx: FeatureContext) -> Opt
     return (cash + short_term_investments) / quarterly_burn * 3.0
 
 
+@register_feature("block_c.cash_runway_latest_q_months")
+def cash_runway_latest_q_months(company_id: int, as_of: date, ctx: FeatureContext) -> Optional[float]:
+    """
+    Like `cash_runway_months`, but on the latest known quarter's operating cash flow alone instead of
+    the trailing-4Q average: how long the cash lasts at the current burn rate.
+
+    Added 2026-11-09 for evaluation. Until the duplicate financial facts were cleaned up,
+    `cash_runway_months` effectively computed this (its newest 4 rows were copies of the latest
+    quarter), and the learned ranking was better with it (offline replay lift@50 1.70 vs 1.62). It
+    is recorded in the backtest's `scores.csv` but not used by the learned model until a clean run
+    confirms it.
+    """
+    cash = ctx.get_latest_fact(company_id, "cash_and_equivalents")
+    latest_operating_cash_flow = ctx.get_latest_fact(company_id, "quarterly_opex_burn")
+    if cash is None or latest_operating_cash_flow is None or latest_operating_cash_flow >= 0:
+        return None
+    short_term_investments = ctx.get_latest_fact(company_id, "short_term_investments") or 0.0
+    return (cash + short_term_investments) / -latest_operating_cash_flow * 3.0
+
+
 @register_feature("block_c.ev_to_cash")
 def ev_to_cash(company_id: int, as_of: date, ctx: FeatureContext) -> Optional[float]:
     """`EV / cash` — flags negative-EV situations (spec §4.3)."""

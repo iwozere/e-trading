@@ -939,6 +939,24 @@ use in the code/config; this section exists so they're all in one place to walk 
   Second half of the window (2021-10 on, more training data): 1.48/1.58/1.33 vs naive 1.47/1.33/1.25.
   Open: the latest-quarter runway (what the duplicate bug computed) ranked better than the trailing-4Q one
   (step 2 1.73/1.52 vs 1.59/1.46 on the same nine features); worth testing as an extra feature.
+  Pi rerun on f09b94d matched the replay exactly: learned 1.66/1.62/1.36 vs naive 1.61/1.54/1.33
+  (`beats_naive_informed_at_50` True for the first time), composite 0.72/0.81/1.09.
+- **ADDED 2026-11-09: weekly backtest job, live learned ranking, label-review digest.**
+  `jobs/run_backtest.py` (`P22 Weekly Backtest`, Saturday 06:00 UTC): `--labels-through` defaults to the day
+  before the oldest pending deal candidate's filing (`labels.labels_complete_through`), trains the live model on
+  every backtest row (`learned.fit_final_model` -> `config.LEARNED_MODEL_PATH`, refused on load when the feature
+  list changed) and emails the like-for-like table with the change since the previous run
+  (`outputs/backtest_report.py`). `jobs/run_scoring.py` adds `rank_by_learned` / `subscores.learned` and orders
+  the watchlist by it when a model exists (dossiers stay on the composite top 25).
+  `jobs/run_label_review_digest.py` (`P22 Label Review Digest`, Monday 07:30 UTC): new, oldest and other pending
+  review items, sent only when something is pending (`outputs/label_review_digest.py`). Emails go to the
+  scheduler system user through `outputs/email_notify.py`. On the Pi: `register_jobs`, then a first manual
+  `run_backtest.py` so scoring has a model before Saturday.
+- **ADDED 2026-11-09: `cash_runway_latest_q_months`** (latest quarter's burn alone) as a `scores.csv` column
+  (`harness.baseline_features`), not a model feature. Offline, replacing the trailing-4Q runway with the
+  approximate step 2 version gave 1.80/1.70/1.38 over the window but 1.42 vs 1.48 @25 in the second half, so
+  it is decided on the next clean run by replay. `get_financial_facts_as_of` now orders ties on `known_from` by
+  `period_end` and `fact_id` (the "latest" value among one filing's periods was up to the database).
 - **ADDED 2026-11-08: Block B trials point-in-time.** Second backtest (Blocks C/E now covered) barely moved:
   lift@50 1.30, precision@25 0.086, recall@200 1.14×, `naive_informed` still ahead (1.47). Trials are now
   filtered to those first posted (or started) by `as_of` (migration 018, `start_date`/`first_posted_date`,

@@ -108,7 +108,10 @@ def universe_as_of(history: Mapping[str, Sequence[UniverseCandidate]], as_of: da
 
 
 def baseline_features(company_ids: Sequence[int], as_of: date, ctx: FeatureContext) -> Dict[int, Dict[str, Optional[float]]]:
-    """The three inputs the §0.3 baselines rank on."""
+    """
+    The three inputs the §0.3 baselines rank on, plus `cash_runway_latest_q_months` (recorded in
+    `scores.csv` for evaluation, see `block_c.cash_runway_latest_q_months`).
+    """
     features: Dict[int, Dict[str, Optional[float]]] = {}
     for company_id in company_ids:
         days = block_b.days_to_next_catalyst(company_id, as_of, ctx)
@@ -116,6 +119,7 @@ def baseline_features(company_ids: Sequence[int], as_of: date, ctx: FeatureConte
             "phase_max": block_b.phase_max(company_id, as_of, ctx),
             "cash_runway_months": block_c.cash_runway_months(company_id, as_of, ctx),
             "days_to_next_catalyst": float(days) if days is not None else None,
+            "cash_runway_latest_q_months": block_c.cash_runway_latest_q_months(company_id, as_of, ctx),
         }
     return features
 

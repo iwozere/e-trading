@@ -454,6 +454,10 @@ class P22Repo:
         UTC, silently shifting this lookahead guard by hours if that session
         timezone is ever not UTC — exactly the class of bug this guard exists
         to prevent (spec §3.1, §8.3).
+
+        Ordered by `known_from`, then `period_end` and `fact_id`, newest first: one filing can carry
+        several periods (same `known_from`), and without the tie-breakers their order, and so the
+        "latest" value, was up to the database.
         """
         rows = self.session.execute(
             select(P22FinancialFact)
@@ -462,7 +466,7 @@ class P22Repo:
                 P22FinancialFact.metric == metric,
                 P22FinancialFact.known_from <= datetime.combine(as_of_date, datetime.max.time(), tzinfo=timezone.utc),
             )
-            .order_by(P22FinancialFact.known_from.desc())
+            .order_by(P22FinancialFact.known_from.desc(), P22FinancialFact.period_end.desc(), P22FinancialFact.fact_id.desc())
         ).scalars().all()
         return [{c.key: getattr(r, c.key) for c in P22FinancialFact.__table__.columns} for r in rows]
 

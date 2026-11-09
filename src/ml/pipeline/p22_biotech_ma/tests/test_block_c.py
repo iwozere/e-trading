@@ -12,6 +12,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p22_biotech_ma.features.block_c import (
     atm_capacity_pct,
+    cash_runway_latest_q_months,
     cash_runway_months,
     dilution_risk,
     enterprise_value,
@@ -110,6 +111,32 @@ def test_cash_runway_months_none_when_operating_cash_flow_positive():
     compute a runway against — not the same as missing data, but the same None result."""
     ctx = _ctx({"cash_and_equivalents": 900.0, "quarterly_opex_burn": 50.0})
     assert cash_runway_months(_COMPANY_ID, _AS_OF, ctx) is None
+
+
+class _SeriesRepo(_FakeRepo):
+    """Like `_FakeRepo`, but `quarterly_opex_burn` is a series, newest first (as the real repo orders it)."""
+
+    def __init__(self, facts: Dict[str, float], burn: List[float]):
+        super().__init__(facts)
+        self._burn = burn
+
+    def get_financial_facts_as_of(self, company_id: int, metric: str, as_of_date: date):
+        if metric == "quarterly_opex_burn":
+            return [{"value": v} for v in self._burn]
+        return super().get_financial_facts_as_of(company_id, metric, as_of_date)
+
+
+def test_cash_runway_latest_q_uses_only_the_latest_quarter():
+    ctx = FeatureContext(as_of=_AS_OF, repo=_SeriesRepo({"cash_and_equivalents": 900.0}, [-300.0, -100.0, -100.0, -100.0]))
+    assert cash_runway_latest_q_months(_COMPANY_ID, _AS_OF, ctx) == 9.0  # 900 / 300 x 3
+    assert cash_runway_months(_COMPANY_ID, _AS_OF, ctx) == 18.0  # trailing average burn 150
+
+
+def test_cash_runway_latest_q_none_without_burn_or_cash():
+    assert cash_runway_latest_q_months(_COMPANY_ID, _AS_OF, _ctx({"cash_and_equivalents": 900.0, "quarterly_opex_burn": 20.0})) is None
+    assert cash_runway_latest_q_months(_COMPANY_ID, _AS_OF, _ctx({"quarterly_opex_burn": -100.0})) is None
+    ctx = _ctx({"cash_and_equivalents": 500.0, "short_term_investments": 400.0, "quarterly_opex_burn": -100.0})
+    assert cash_runway_latest_q_months(_COMPANY_ID, _AS_OF, ctx) == 27.0
 
 
 def test_ev_to_cash_flags_negative_ev():

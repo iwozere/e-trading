@@ -91,6 +91,16 @@ python -m src.ml.pipeline.p22_biotech_ma.cli.backtest_cli --labels-through 2026-
 python -m src.ml.pipeline.p22_biotech_ma.cli.lookahead_audit_cli --samples 200          # exit 1 on a violation
 ```
 
+Weekly automation (2026-11-09): `P22 Weekly Backtest` (Saturday 06:00 UTC) runs the backtest with the
+label cut-off taken from the review queue, retrains the live learned model that `P22 Scoring` ranks the
+watchlist with, and emails lift vs the baselines; `P22 Label Review Digest` (Monday 07:30 UTC) emails the
+deal candidates waiting for review. Both can be run by hand:
+
+```bash
+python src/ml/pipeline/p22_biotech_ma/jobs/run_backtest.py --no-email           # about an hour on the Pi
+python src/ml/pipeline/p22_biotech_ma/jobs/run_label_review_digest.py --no-email
+```
+
 ## Integration
 This module integrates with:
 - `src.data.downloader.edgar_downloader` — SEC EDGAR access (submissions, XBRL, EFTS, 13F, Form 4, 13D/G)

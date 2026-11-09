@@ -21,16 +21,21 @@ the rest (2026-11-09 analysis): the FMP price history mostly lacks names that la
 missing price says the company is about to exit. The price-derived features (`PRICE_FEATURES`) are
 therefore filled with the training median, so the model cannot tell "unknown" from "typical". Every
 other feature keeps its missing values, which the gradient-boosted trees route on their own.
+
+**Live use.** The weekly backtest job (`jobs/run_backtest.py`) trains one more model on every
+backtest row (`fit_final_model`) and saves it (`save_model`, `config.LEARNED_MODEL_PATH`); daily
+scoring loads it (`load_model`) and ranks the live universe with it next to the composite.
 """
 
 from __future__ import annotations
 
 import math
+import pickle
 import sys
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 from sklearn.ensemble import HistGradientBoostingClassifier
@@ -189,6 +194,62 @@ class WalkForwardRanker:
     def add(self, rows: Sequence[Dict[str, Any]]) -> None:
         """Keep a snapshot's rows for later training."""
         self.history.extend(rows)
+
+
+@dataclass
+class SavedModel:
+    """
+    The model live scoring uses: trained by the weekly backtest job on every backtest row (all of
+    whose 24-month labels were complete), with the feature list it was trained on.
+    """
+
+    fitted: FittedModel
+    features: Tuple[str, ...]
+    labels_through: date
+    trained_at: datetime
+
+
+def fit_final_model(rows: Sequence[Mapping[str, Any]], labels_through: date, params: Optional[LearnedParams] = None) -> Optional[SavedModel]:
+    """
+    Train on the backtest rows whose label window closed by `labels_through` (normally all of them,
+    since the backtest's last snapshot is `labels_through` minus 24 months). `None` when too few positives.
+    """
+    cutoff = add_months(labels_through, -LABEL_HORIZON_MONTHS)
+    train = [r for r in rows if r["as_of"] <= cutoff]
+    fitted = fit_model(train, cutoff, params or LearnedParams())
+    if fitted is None:
+        _logger.warning("Final learned model not trained: too few positives in %d rows through %s", len(train), cutoff)
+        return None
+    _logger.info("Final learned model: %d rows, %d positives, labels through %s", fitted.train_rows, fitted.train_positives, labels_through)
+    return SavedModel(fitted=fitted, features=LEARNED_FEATURES, labels_through=labels_through, trained_at=datetime.now(timezone.utc))
+
+
+def save_model(model: SavedModel, path: Path) -> None:
+    """Write `model` to `path` atomically (a scoring run reading it never sees half a file)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with tmp.open("wb") as fh:
+        pickle.dump(model, fh)
+    tmp.replace(path)
+
+
+def load_model(path: Path) -> Optional[SavedModel]:
+    """
+    The model at `path` (written by `save_model` on this machine), or `None` when there is none or it
+    was trained on a different feature list than the code now uses.
+    """
+    if not path.exists():
+        _logger.info("No learned model at %s", path)
+        return None
+    with path.open("rb") as fh:
+        model = pickle.load(fh)  # noqa: S301 — our own file, written by the weekly backtest job
+    if not isinstance(model, SavedModel):
+        _logger.warning("Ignoring %s: not a SavedModel", path)
+        return None
+    if tuple(model.features) != LEARNED_FEATURES:
+        _logger.warning("Ignoring learned model %s: trained on %s, code now uses %s", path, model.features, LEARNED_FEATURES)
+        return None
+    return model
 
 
 def rank_by_probability(probabilities: Mapping[int, float], company_ids: Optional[set[int]] = None, salt: str = "") -> List[int]:

@@ -1,5 +1,7 @@
 """
-P22 — walk-forward backtest CLI (spec §0.3, §8.4, M6). Human-run, read-only, not a scheduler job.
+P22 — walk-forward backtest CLI (spec §0.3, §8.4, M6). Human-run, read-only. The weekly scheduler
+job `jobs/run_backtest.py` runs the same backtest with an automatic `--labels-through`, then trains
+the live learned model and emails the results.
 
     python -m src.ml.pipeline.p22_biotech_ma.cli.backtest_cli --labels-through 2026-10-30
     python -m src.ml.pipeline.p22_biotech_ma.cli.backtest_cli --start 2016-01-01 --end 2023-12-31 \
@@ -21,7 +23,7 @@ import json
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -126,14 +128,17 @@ def write_results(result: BacktestResult, out_dir: Path, meta: Dict[str, Any]) -
     return summary
 
 
-def run(start: date, end: Optional[date], labels_through: date, step_months: int, ks: Sequence[int]) -> int:
-    """Run the backtest and write the results; returns the exit code."""
-    results_dir = setup_run_logging()
+def execute(start: date, end: Optional[date], labels_through: date, step_months: int, ks: Sequence[int],
+            out_dir: Path) -> Optional[Tuple[BacktestResult, Dict[str, Any]]]:
+    """
+    Run the backtest and write its files to `out_dir`. Returns the result and summary, or `None`
+    when no DERA quarter has landed. Shared by this CLI and the weekly job (`jobs/run_backtest.py`).
+    """
     end = end or add_months(labels_through, -24)
     quarters_rows = all_landed_quarters()
     if not quarters_rows:
         _logger.error("No landed DERA quarters — run run_sec_universe_ingest.py first")
-        return 1
+        return None
     # Exchange eligibility needs today's ticker map, which is not point in time, so it is left out.
     history = build_universe_history(quarters_rows, {})
     window = BacktestWindow(start=start, end=end, labels_complete_through=labels_through, step_months=step_months, ks=ks)
@@ -150,8 +155,13 @@ def run(start: date, end: Optional[date], labels_through: date, step_months: int
         )
     meta = {"start": start, "end": end, "labels_complete_through": labels_through, "step_months": step_months,
             "deals_entered": len(deals), "config_hash": config_hash()}
-    write_results(result, results_dir / "backtest", meta)
-    return 0
+    return result, write_results(result, out_dir, meta)
+
+
+def run(start: date, end: Optional[date], labels_through: date, step_months: int, ks: Sequence[int]) -> int:
+    """Run the backtest and write the results; returns the exit code."""
+    results_dir = setup_run_logging()
+    return 0 if execute(start, end, labels_through, step_months, ks, results_dir / "backtest") is not None else 1
 
 
 def main(argv: Optional[List[str]] = None) -> int:

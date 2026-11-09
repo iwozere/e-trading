@@ -29,7 +29,7 @@ import sys
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 import yaml
 
@@ -136,6 +136,28 @@ class DealLabels:
 def is_censored(as_of: date, labels_complete_through: date, horizon_months: int = LABEL_HORIZON_MONTHS) -> bool:
     """True when part of the snapshot's label window lies after the label set's coverage."""
     return add_months(as_of, horizon_months) > labels_complete_through
+
+
+def labels_complete_through(pending_deal_candidates: Sequence[Mapping[str, Any]], today: date) -> date:
+    """
+    The day the deal labels are complete up to, for the weekly backtest: the day before the oldest
+    still-pending `deal_candidate` review item's filing, or `today` when none is pending. Every deal
+    filed before that has been reviewed; a pending one may still turn out to be a positive.
+
+    Args:
+        pending_deal_candidates: Pending `deal_candidate` review items (`payload.filed_date` YYYY-MM-DD).
+        today: Run date.
+    """
+    filed: List[date] = []
+    for item in pending_deal_candidates:
+        raw = (item.get("payload") or {}).get("filed_date")
+        try:
+            filed.append(date.fromisoformat(str(raw)))
+        except ValueError:
+            continue
+    if not filed:
+        return today
+    return min(today, min(filed) - timedelta(days=1))
 
 
 def consideration_value(deal: Dict[str, Any], policy: CvrPolicy) -> Optional[float]:
