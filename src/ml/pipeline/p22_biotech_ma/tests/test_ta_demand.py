@@ -65,7 +65,7 @@ def test_deal_heat_counts_same_area_deals_in_trailing_window_only():
 def test_ta_demand_features_count_acquirers_with_phase3_in_area():
     phase3 = {100: {"oncology_solid": 3, "neurology": 1}, 101: {"oncology_solid": 2}, 102: {"autoimmune": 4}}
     features = ta_demand_features("oncology_solid", phase3, date(2019, 1, 1), None)
-    assert features == {"ta_acquirer_demand": 2.0, "ta_acquirer_phase3_assets": 5.0, "ta_deal_heat_24m": None,
+    assert features == {"ta_lead_area_known": 1.0, "ta_acquirer_demand": 2.0, "ta_acquirer_phase3_assets": 5.0, "ta_deal_heat_24m": None,
                         "ta_acquirer_revenue_growth": None}
 
 
@@ -75,7 +75,9 @@ def test_ta_acquirer_revenue_growth_is_median_of_acquirers_present_in_area():
     features = ta_demand_features("oncology_solid", phase3, date(2019, 1, 1), None, growth)
     assert features["ta_acquirer_revenue_growth"] == 0.025
     assert ta_demand_features("neurology", phase3, date(2019, 1, 1), None, growth)["ta_acquirer_revenue_growth"] is None
-    assert set(ta_demand_features(None, phase3, date(2019, 1, 1), None).values()) == {None}
+    unknown = ta_demand_features(None, phase3, date(2019, 1, 1), None)
+    assert unknown.pop("ta_lead_area_known") == 0.0
+    assert set(unknown.values()) == {None}
 
 
 def test_ta_overlap_prefers_gap_then_falls_back_to_presence():

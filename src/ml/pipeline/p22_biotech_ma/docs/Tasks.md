@@ -918,10 +918,27 @@ use in the code/config; this section exists so they're all in one place to walk 
   cash tags stop for Gilead (2022) and Biogen (2019) and IFRS debt tags are not mapped.
 - **FIXED 2026-11-09: Financial Facts job re-inserted every fact every day.** Pi logs showed ~169,000 facts
   written per weekday run: the job writes each company's full XBRL history and
-  `upsert_financial_fact_bitemporal` always inserts. Reads stayed correct (same `known_from` and value).
+  `upsert_financial_fact_bitemporal` always inserts. Latest-value reads stayed correct, but
+  `FeatureContext.get_trailing_average` takes the newest 4 rows, which were mostly copies of the latest
+  quarter: before the cleanup `cash_runway_months` used the latest quarter's burn, not the trailing 4Q
+  (24,281 of 65,057 backtest rows changed after it).
   The job now skips facts already stored (`P22Repo.list_financial_fact_keys`; summary adds `facts_seen`),
   and `cli/dedupe_facts_cli.py` deletes the existing copies, keeping the newest of each (the last run's
   chain and open row). On the Pi: `dedupe_facts_cli --dry-run`, then without it.
+- **FIXED 2026-11-09: backtest ties were broken by `company_id`, which tracks the label.** Companies created
+  later (many while deals were entered) are acquired far more often, so any ranking with ties was biased by
+  id order: `block:strategic_fit` (99.7% of targets share one score) gave lift@50 0.36 with ascending ids and
+  3.75 with descending ids. Every ranking now breaks ties by `baselines.tie_break` (a hash of snapshot date
+  and id). With fair ties naive-informed rises to 1.61/1.54/1.33 (was 1.43/1.54/1.31); the learned
+  ranking is unaffected. `company_id` (or anything tracking when a row was created) must never be a feature.
+- **CHANGED 2026-11-09: learned feature set after the step 5 backtest.** All four area features cost lift
+  (learned 1.52/1.43/1.34 vs 1.59/1.46/1.33 without them, offline replay on the step 5 `scores.csv`). The
+  signal is in having a lead area at all (8.3% acquired vs 5.5%). New `ta_lead_area_known`; the model now
+  uses the nine target features plus `ta_lead_area_known` and `ta_acquirer_demand`: replay 1.66/1.62/1.36
+  vs naive-informed 1.61/1.54/1.33, chosen from five sets on the same data, so the margin is within noise.
+  Second half of the window (2021-10 on, more training data): 1.48/1.58/1.33 vs naive 1.47/1.33/1.25.
+  Open: the latest-quarter runway (what the duplicate bug computed) ranked better than the trailing-4Q one
+  (step 2 1.73/1.52 vs 1.59/1.46 on the same nine features); worth testing as an extra feature.
 - **ADDED 2026-11-08: Block B trials point-in-time.** Second backtest (Blocks C/E now covered) barely moved:
   lift@50 1.30, precision@25 0.086, recall@200 1.14×, `naive_informed` still ahead (1.47). Trials are now
   filtered to those first posted (or started) by `as_of` (migration 018, `start_date`/`first_posted_date`,

@@ -186,6 +186,24 @@ def test_block_ranking_sorts_by_block_and_friction_ascending():
     assert baselines.block_ranking(rows, "friction_penalty", {1, 3}) == [3, 1]
 
 
+def test_tie_break_is_reproducible_and_not_id_order():
+    ids = list(range(1, 201))
+    order = sorted(ids, key=baselines.tie_break)
+    assert order == sorted(ids, key=baselines.tie_break)  # reproducible
+    assert order != ids and order != ids[::-1]  # unrelated to the id order
+    assert sorted(ids, key=lambda c: baselines.tie_break(c, "2020-01-01")) != order  # the salt reshuffles
+
+
+def test_rankings_break_ties_by_hash_not_id():
+    rows = [{"company_id": cid, "composite": 1.0, "subscores": {"blocks": {"strategic_fit": 0.5}}} for cid in range(1, 51)]
+    expected = sorted(range(1, 51), key=lambda c: baselines.tie_break(c, "s"))
+    assert baselines.model_ranking(rows, salt="s") == expected
+    assert baselines.block_ranking(rows, "strategic_fit", salt="s") == expected
+    tied = {cid: {"phase_max": 2.0, "cash_runway_months": 6.0, "days_to_next_catalyst": 30.0} for cid in range(1, 51)}
+    assert baselines.naive_informed(tied, "s") == expected
+    assert baselines.catalyst_proximity(tied, "s") == expected
+
+
 def test_score_rows_flatten_blocks_features_and_labels():
     rows = [{"company_id": 7, "ticker": "SEVN", "composite": 0.6, "tier": 0,
              "subscores": {"fundamental": 0.6, "blocks": {"strategic_fit": 0.4}, "features": {"phase_max": 3.0}}}]
@@ -266,7 +284,9 @@ def test_run_backtest_keeps_later_acquired_inactive_company_and_drops_pending(mo
     model = next(r for r in result.all_names.as_rows() if r["ranking"] == "model")
     assert model["hits"] == 0  # model ranks company 2 first (composite 2.0 > 1.0)
     naive = next(r for r in result.all_names.as_rows() if r["ranking"] == "naive_informed")
-    assert naive["hits"] == 1  # tie on phase/runway -> company_id order puts 1 first
+    # tie on phase/runway -> the hashed tie-break (salted with as_of) decides, not the id order
+    first = min((1, 2), key=lambda cid: baselines.tie_break(cid, "2020-01-01"))
+    assert naive["hits"] == int(first == 1)
     assert result.return_rows == [{"company_id": 1}]
     assert [(r["company_id"], r["positive"]) for r in result.score_rows] == [(1, 1), (2, 0)]
     assert result.learned_window.as_rows() == []  # one snapshot: no 24-month-old training rows yet

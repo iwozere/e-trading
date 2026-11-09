@@ -289,6 +289,8 @@ def test_score_universe_ranks_tiers_and_explains():
     assert rows[10]["subscores"]["features"]["ta_acquirer_demand"] == 0.0
     assert rows[10]["subscores"]["features"]["ta_deal_heat_24m"] is None  # no deal history passed
     assert rows[12]["subscores"]["features"]["ta_acquirer_demand"] is None  # no trials, no lead area
+    assert rows[12]["subscores"]["features"]["ta_lead_area_known"] == 0.0
+    assert rows[10]["subscores"]["features"]["ta_lead_area_known"] == 1.0
     assert [r["company_id"] for r in result.rows] == [10, 11, 12]
 
     assert result.summary["ranked"] == 2

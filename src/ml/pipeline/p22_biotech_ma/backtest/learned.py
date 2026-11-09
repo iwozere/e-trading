@@ -10,6 +10,12 @@ whose 24-month label window had closed by `as_of` (row `as_of` <= `as_of` - `LAB
 i.e. labels that were already known. Until enough such rows exist (`min_train_positives`) there is
 no learned ranking for that snapshot.
 
+**Feature set** (2026-11-09 offline replay of the walk-forward on the step 5 `scores.csv`, 75
+snapshots, lift @25/@50/@200): the nine target features alone 1.59/1.46/1.33; plus all four
+therapeutic-area features 1.52/1.43/1.34; plus `ta_lead_area_known` and `ta_acquirer_demand` only
+1.66/1.62/1.36 (naive-informed 1.61/1.54/1.33). The other area features stay in `scores.csv` for
+analysis but not in the model.
+
 **Price-gap leak.** Companies with no market cap at `as_of` were acquired about twice as often as
 the rest (2026-11-09 analysis): the FMP price history mostly lacks names that later delisted, so a
 missing price says the company is about to exit. The price-derived features (`PRICE_FEATURES`) are
@@ -32,6 +38,7 @@ from sklearn.ensemble import HistGradientBoostingClassifier
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.ml.pipeline.p22_biotech_ma.backtest.baselines import tie_break
 from src.ml.pipeline.p22_biotech_ma.backtest.labels import add_months
 from src.notification.logger import setup_logger
 
@@ -50,10 +57,8 @@ LEARNED_FEATURES = (
     "f_is_foreign_domiciled",
     "f_ev_to_cash",
     "f_size_band",
+    "f_ta_lead_area_known",
     "f_ta_acquirer_demand",
-    "f_ta_acquirer_phase3_assets",
-    "f_ta_deal_heat_24m",
-    "f_ta_acquirer_revenue_growth",
 )
 # Need a market cap; missing mostly means "price history lost because the company later exited".
 PRICE_FEATURES = frozenset({"f_ev_to_cash", "f_size_band"})
@@ -186,7 +191,10 @@ class WalkForwardRanker:
         self.history.extend(rows)
 
 
-def rank_by_probability(probabilities: Mapping[int, float], company_ids: Optional[set[int]] = None) -> List[int]:
-    """Company ids by probability, best first (ties by id), restricted to `company_ids` when given."""
+def rank_by_probability(probabilities: Mapping[int, float], company_ids: Optional[set[int]] = None, salt: str = "") -> List[int]:
+    """
+    Company ids by probability, best first, restricted to `company_ids` when given. Ties are broken
+    by `baselines.tie_break(cid, salt)`, never by id order (ids track the label).
+    """
     items = [(p, cid) for cid, p in probabilities.items() if company_ids is None or cid in company_ids]
-    return [cid for _, cid in sorted(items, key=lambda x: (-x[0], x[1]))]
+    return [cid for _, cid in sorted(items, key=lambda x: (-x[0], tie_break(x[1], salt)))]

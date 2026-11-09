@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.ml.pipeline.p22_biotech_ma.backtest.baselines import tie_break
 from src.ml.pipeline.p22_biotech_ma.backtest.learned import (
     LEARNED_FEATURES,
     LearnedParams,
@@ -85,7 +86,8 @@ def test_walk_forward_trains_only_on_rows_with_complete_labels():
     assert rank_by_probability(probabilities) == [2, 1]
 
 
-def test_rank_by_probability_breaks_ties_by_id_and_restricts():
+def test_rank_by_probability_breaks_ties_by_hash_and_restricts():
     probabilities = {3: 0.5, 1: 0.5, 2: 0.9}
-    assert rank_by_probability(probabilities) == [2, 1, 3]
-    assert rank_by_probability(probabilities, {1, 3}) == [1, 3]
+    tied = sorted((1, 3), key=lambda c: tie_break(c, "s"))
+    assert rank_by_probability(probabilities, salt="s") == [2, *tied]
+    assert rank_by_probability(probabilities, {1, 3}, "s") == tied

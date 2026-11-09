@@ -126,16 +126,19 @@ def _add_rankings(table: MetricsTable, rankings: Mapping[str, List[int]], positi
 
 
 def _rankings(rows: Sequence[Dict[str, Any]], features: Mapping[int, Mapping[str, Optional[float]]],
-              blocks: Sequence[str], company_ids: Optional[set[int]] = None) -> Dict[str, List[int]]:
-    """Model, the two baselines and one ranking per block, restricted to `company_ids` when given."""
+              blocks: Sequence[str], company_ids: Optional[set[int]] = None, salt: str = "") -> Dict[str, List[int]]:
+    """
+    Model, the two baselines and one ranking per block, restricted to `company_ids` when given.
+    Ties are broken by `baselines.tie_break` with `salt` (the snapshot date), never by id order.
+    """
     scoped = features if company_ids is None else {cid: f for cid, f in features.items() if cid in company_ids}
     rankings = {
-        "model": baselines.model_ranking(rows, company_ids),
-        "naive_informed": baselines.naive_informed(scoped),
-        "catalyst_proximity": baselines.catalyst_proximity(scoped),
+        "model": baselines.model_ranking(rows, company_ids, salt),
+        "naive_informed": baselines.naive_informed(scoped, salt),
+        "catalyst_proximity": baselines.catalyst_proximity(scoped, salt),
     }
     for block in blocks:
-        rankings[BLOCK_RANKING_PREFIX + block] = baselines.block_ranking(rows, block, company_ids)
+        rankings[BLOCK_RANKING_PREFIX + block] = baselines.block_ranking(rows, block, company_ids, salt)
     return rankings
 
 
@@ -194,12 +197,13 @@ def run_snapshot(
     tier0_ids = {r["company_id"] for r in result.rows if r["tier"] == 0}
     target_set = set(targets)
     blocks = list(scoring_config.composite)
+    salt = as_of.isoformat()
     return {
         "targets": targets,
         "rows": result.rows,
         "features": features,
-        "rankings": _rankings(result.rows, features, blocks),
-        "tier0_rankings": _rankings(result.rows, features, blocks, tier0_ids),
+        "rankings": _rankings(result.rows, features, blocks, salt=salt),
+        "tier0_rankings": _rankings(result.rows, features, blocks, tier0_ids, salt),
         "tier0_ids": tier0_ids,
         "positives": labels.positives(as_of) & target_set,
         "pe_positives": labels.pe_positives(as_of) & target_set,
@@ -252,8 +256,8 @@ def run_backtest(
         probabilities = ranker.predict(as_of, rows)
         ranker.add(rows)
         if probabilities is not None:
-            snap["rankings"][LEARNED_RANKING] = rank_by_probability(probabilities)
-            snap["tier0_rankings"][LEARNED_RANKING] = rank_by_probability(probabilities, tier0_ids)
+            snap["rankings"][LEARNED_RANKING] = rank_by_probability(probabilities, salt=as_of.isoformat())
+            snap["tier0_rankings"][LEARNED_RANKING] = rank_by_probability(probabilities, tier0_ids, as_of.isoformat())
             _add_rankings(result.learned_window, snap["rankings"], positives, len(targets))
             for row in rows:
                 row["learned_p"] = probabilities.get(row["company_id"])

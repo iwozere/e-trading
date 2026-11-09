@@ -15,7 +15,12 @@ About 60% of target assets do have a classified therapeutic area, so these featu
 - `ta_acquirer_revenue_growth` — median latest annual revenue growth of the acquirers present in the
   area (Block A's pressure proxy, `block_a.revenue_growth_1y`): buyers whose growth is stalling.
 
-Each is `None` when the target's lead area is unknown. Everything reads trials public by `as_of` (or
+- `ta_lead_area_known` — 1.0 when the target has a lead area at all, else 0.0. Most of the signal
+  is here (2026-11-09 backtest: 8.3% acquired with a known area vs 5.5% without); among targets with
+  a known area the four above are weak, and the learned ranking keeps only this flag and
+  `ta_acquirer_demand` (offline replay of five feature sets, see `backtest/learned.py`).
+
+The four counts are `None` when the target's lead area is unknown. Everything reads trials public by `as_of` (or
 by the past deal's announcement date), and only deals announced by `as_of`, so a backtest snapshot
 sees what was knowable then. Area classification itself is today's (it comes from trial conditions,
 which do not change).
@@ -97,7 +102,7 @@ def ta_demand_features(
     acquirer_growth: Optional[Mapping[int, Optional[float]]] = None,
 ) -> Dict[str, Optional[float]]:
     """
-    The three features for one target whose lead area is `area`.
+    The therapeutic-area features for one target whose lead area is `area`.
 
     Args:
         area: The target's lead therapeutic area, or None.
@@ -107,11 +112,12 @@ def ta_demand_features(
         acquirer_growth: `{acquirer_id: latest annual revenue growth or None}` as of `as_of`.
     """
     if area is None:
-        return {"ta_acquirer_demand": None, "ta_acquirer_phase3_assets": None, "ta_deal_heat_24m": None,
-                "ta_acquirer_revenue_growth": None}
+        return {"ta_lead_area_known": 0.0, "ta_acquirer_demand": None, "ta_acquirer_phase3_assets": None,
+                "ta_deal_heat_24m": None, "ta_acquirer_revenue_growth": None}
     present = [cid for cid, by_area in acquirer_phase3_by_area.items() if by_area.get(area, 0) > 0]
     growth = sorted(g for cid in present if (g := (acquirer_growth or {}).get(cid)) is not None)
     return {
+        "ta_lead_area_known": 1.0,
         "ta_acquirer_demand": float(len(present)),
         "ta_acquirer_phase3_assets": float(sum(by_area.get(area, 0) for by_area in acquirer_phase3_by_area.values())),
         "ta_deal_heat_24m": deal_history.heat(area, as_of) if deal_history is not None else None,
