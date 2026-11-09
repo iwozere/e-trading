@@ -36,6 +36,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.ml.pipeline.p22_biotech_ma.features import block_a, block_b, block_c, block_e
 from src.ml.pipeline.p22_biotech_ma.features.block_g import build_block_g, process_tier
 from src.ml.pipeline.p22_biotech_ma.features.context import FeatureContext
+from src.ml.pipeline.p22_biotech_ma.features.ta_demand import DealAreaHistory, lead_therapeutic_area, ta_demand_features
 from src.ml.pipeline.p22_biotech_ma.ingest.acquirer_config import AcquirerConfig
 from src.ml.pipeline.p22_biotech_ma.ingest.size_floor import evaluate_size_floor
 from src.ml.pipeline.p22_biotech_ma.scoring.composite import block_scores, fundamental_score, rank_desc, rank_percentile
@@ -121,6 +122,7 @@ def build_acquirer_profile(repo: Any, ctx: FeatureContext, acquirer: AcquirerCon
         bloc=acquirer.bloc,
         dry_powder=block_a.dry_powder(company_id, ctx.as_of, ctx),
         pipeline_gap_by_ta=block_a.pipeline_gap_by_ta(company_id, ctx.as_of, ctx),
+        phase3_by_ta=ctx.get_phase3_asset_count_by_ta(company_id),
         modalities=frozenset(a["modality"] for a in assets if a.get("modality") not in (None, UNCLASSIFIED_MODALITY)),
         late_stage_indications=frozenset(
             ind for a in assets if a["asset_id"] in late_stage_ids and (ind := normalize_indication(a.get("indication")))
@@ -130,14 +132,15 @@ def build_acquirer_profile(repo: Any, ctx: FeatureContext, acquirer: AcquirerCon
 
 def build_target_profile(repo: Any, ctx: FeatureContext, company_id: int) -> TargetProfile:
     """Assemble one target's lead-asset `fit()` inputs (lead asset = furthest-progressed, see block_b)."""
-    lead = block_b.lead_asset(ctx.get_trials_for_company(company_id))
+    trials = ctx.get_trials_for_company(company_id)
+    lead = block_b.lead_asset(trials)
     asset: Dict[str, Any] = {}
     if lead is not None and lead.get("asset_id") is not None:
         asset = next((a for a in repo.get_assets_for_company(company_id) if a["asset_id"] == lead["asset_id"]), {})
     return TargetProfile(
         company_id=company_id,
         enterprise_value=block_c.enterprise_value(company_id, ctx.as_of, ctx),
-        lead_therapeutic_area=lead.get("therapeutic_area") if lead else None,
+        lead_therapeutic_area=lead_therapeutic_area(trials),
         lead_modality=asset.get("modality"),
         lead_indication=asset.get("indication"),
     )
@@ -192,6 +195,7 @@ def score_universe(
     config: ScoringConfig,
     acquirers: Sequence[AcquirerConfig],
     target_ids: Optional[Sequence[int]] = None,
+    deal_history: Optional[DealAreaHistory] = None,
 ) -> ScoreRunResult:
     """
     Score every target as of `as_of`. Does not write anything (see `persist_score_run`).
@@ -202,6 +206,7 @@ def score_universe(
         config: Parsed weights.
         acquirers: Parsed `p22_acquirers.yaml`.
         target_ids: Restrict to these companies (skips universe selection) — for spot checks and tests.
+        deal_history: Past strategic acquisitions for `ta_deal_heat_24m` (None leaves it unknown).
     """
     ctx = FeatureContext(as_of=as_of, repo=repo)
     companies = repo.list_companies_full()
@@ -210,6 +215,7 @@ def score_universe(
     resolved = resolve_acquirers(acquirers, companies, as_of)
     acquirer_profiles = [build_acquirer_profile(repo, ctx, cfg, cid) for cfg, cid in resolved]
     acquirer_ids = {cid for _, cid in resolved}
+    acquirer_phase3 = {p.company_id: p.phase3_by_ta for p in acquirer_profiles}
 
     excluded: Dict[str, int] = {}
     if target_ids is None:
@@ -238,6 +244,8 @@ def score_universe(
             features.update(values)
         dilution[company_id] = block_c.dilution_risk(company_id, as_of, ctx)
         features["dilution_risk"] = dilution[company_id]
+        area = lead_therapeutic_area(ctx.get_trials_for_company(company_id))
+        features.update(ta_demand_features(area, acquirer_phase3, as_of, deal_history))
         raw_features[company_id] = features
 
         pairs = best_fits(acquirer_profiles, build_target_profile(repo, ctx, company_id), config)

@@ -28,6 +28,7 @@ from src.data.db.services.database_service import DatabaseService
 from src.ml.pipeline.p22_biotech_ma.ingest.acquirer_config import load_acquirers
 from src.ml.pipeline.p22_biotech_ma.jobs.run_common import setup_run_logging
 from src.ml.pipeline.p22_biotech_ma.outputs.dossier import write_dossiers
+from src.ml.pipeline.p22_biotech_ma.features.ta_demand import DealAreaHistory
 from src.ml.pipeline.p22_biotech_ma.scoring.score_run import persist_score_run, score_universe
 from src.ml.pipeline.p22_biotech_ma.scoring.weights_config import config_hash, load_scoring_config
 from src.notification.logger import setup_logger
@@ -84,7 +85,8 @@ def run(as_of: date | None = None, dry_run: bool = False) -> dict:
     summary: Dict[str, Any] = {}
     try:
         with DatabaseService().uow() as uow:
-            result = score_universe(uow.p22, as_of, config, acquirers)
+            deal_history = DealAreaHistory(uow.p22, uow.p22.list_deals())
+            result = score_universe(uow.p22, as_of, config, acquirers, deal_history=deal_history)
             summary = dict(result.summary)
             write_watchlist(result.rows, results_dir, summary)
             summary["run_id"] = persist_score_run(uow.p22, as_of, config, digest, result.rows)

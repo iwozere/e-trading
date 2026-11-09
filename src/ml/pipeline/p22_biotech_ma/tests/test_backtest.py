@@ -239,7 +239,7 @@ def test_run_backtest_keeps_later_acquired_inactive_company_and_drops_pending(mo
         assert require_active is False
         return [c["company_id"] for c in companies], {"inactive": 0}
 
-    def fake_score(repo, as_of, config, acquirers, target_ids=None):
+    def fake_score(repo, as_of, config, acquirers, target_ids=None, deal_history=None):
         seen_targets.append(list(target_ids or []))
         rows = [{"company_id": cid, "composite": float(cid), "tier": 0} for cid in target_ids or []]
         return SimpleNamespace(rows=rows, summary={})

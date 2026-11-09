@@ -285,6 +285,10 @@ def test_score_universe_ranks_tiers_and_explains():
     assert rows[10]["contributions"]["top_pairs"][0]["terms"]["modality_capability"] == 1.0
     assert rows[11]["subscores"]["blocks"]["strategic_fit"] == 0.0
     assert "acquirer_pressure_matched" in rows[10]["subscores"]["missing_blocks"]
+    # Pfizer has no Phase III areas on file in this fake, so it counts as absent from oncology.
+    assert rows[10]["subscores"]["features"]["ta_acquirer_demand"] == 0.0
+    assert rows[10]["subscores"]["features"]["ta_deal_heat_24m"] is None  # no deal history passed
+    assert rows[12]["subscores"]["features"]["ta_acquirer_demand"] is None  # no trials, no lead area
     assert [r["company_id"] for r in result.rows] == [10, 11, 12]
 
     assert result.summary["ranked"] == 2

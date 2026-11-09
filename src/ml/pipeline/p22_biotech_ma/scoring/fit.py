@@ -61,6 +61,7 @@ class AcquirerProfile:
     bloc: str
     dry_powder: Optional[float] = None
     pipeline_gap_by_ta: Dict[str, Optional[float]] = field(default_factory=dict)
+    phase3_by_ta: Dict[str, int] = field(default_factory=dict)
     modalities: FrozenSet[str] = frozenset()
     late_stage_indications: FrozenSet[str] = frozenset()
     commercial_countries: Optional[FrozenSet[str]] = None
@@ -103,12 +104,19 @@ class FitResult:
 
 
 def ta_overlap(acquirer: AcquirerProfile, target: TargetProfile) -> Optional[float]:
+    """
+    1.0 when the acquirer needs the target's lead area (positive pipeline gap), 0.0 when it does not.
+    Without a gap (its inputs are not curated, 2026-11-09) falls back to presence: 1.0 when the
+    acquirer has a Phase III asset in the area, else 0.0; None when its Phase III areas are unknown.
+    """
     if target.lead_therapeutic_area is None:
         return None
     gap = acquirer.pipeline_gap_by_ta.get(target.lead_therapeutic_area)
-    if gap is None:
+    if gap is not None:
+        return 1.0 if gap > 0 else 0.0
+    if not acquirer.phase3_by_ta:
         return None
-    return 1.0 if gap > 0 else 0.0
+    return 1.0 if acquirer.phase3_by_ta.get(target.lead_therapeutic_area, 0) > 0 else 0.0
 
 
 def modality_capability(acquirer: AcquirerProfile, target: TargetProfile) -> Optional[float]:

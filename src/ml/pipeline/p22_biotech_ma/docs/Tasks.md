@@ -896,6 +896,18 @@ use in the code/config; this section exists so they're all in one place to walk 
   count, 73 stale price; a public float within two years was known for 88% of the `no_price` rows. Fixed with
   the public-float fallback in `FeatureContext.get_market_cap` (docs/Design.md "Size floor"). Needs a
   backtest rerun. Then Block A from SEC XBRL (step 3).
+- **ADDED 2026-11-09: step 3a, therapeutic-area matching (`features/ta_demand.py`).** On prod 60% of target
+  assets have a classified area but 92% have no modality, which is why Block D (modality-only in practice)
+  scored 5% of targets. New per-target features, also fed to the learned model: `ta_acquirer_demand`
+  (acquirers with a Phase III asset in the target's lead area), `ta_acquirer_phase3_assets`, and
+  `ta_deal_heat_24m` (strategic acquisitions in the same area announced in the 24 months to `as_of`,
+  each past target's area read as of its announcement). `fit.ta_overlap` falls back to Phase III presence
+  when the pipeline gap is unknown. Block A finding: `p22_patent_expiry` is empty on prod although the
+  normalizer's matching works (local replay of the 2026-10-02 Orange Book: 2,440 patents to 6 acquirers;
+  subsidiaries like Janssen, Genentech, Merck Sharp and Dohme, ELI LILLY AND CO do not match). More
+  important: the Orange Book lists only unexpired patents, so a historical snapshot cannot see the
+  patents that expired since — patent-cliff counts are usable live, not in the backtest. Step 3b therefore
+  builds acquirer pressure from SEC XBRL only (revenue growth, cash capacity), which is point-in-time.
 - **ADDED 2026-11-08: Block B trials point-in-time.** Second backtest (Blocks C/E now covered) barely moved:
   lift@50 1.30, precision@25 0.086, recall@200 1.14×, `naive_informed` still ahead (1.47). Trials are now
   filtered to those first posted (or started) by `as_of` (migration 018, `start_date`/`first_posted_date`,

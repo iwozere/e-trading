@@ -48,6 +48,7 @@ from src.ml.pipeline.p22_biotech_ma.backtest.learned import LearnedParams, WalkF
 from src.ml.pipeline.p22_biotech_ma.backtest.metrics import DEFAULT_KS, MetricsTable
 from src.ml.pipeline.p22_biotech_ma.features import block_b, block_c
 from src.ml.pipeline.p22_biotech_ma.features.context import FeatureContext
+from src.ml.pipeline.p22_biotech_ma.features.ta_demand import DealAreaHistory
 from src.ml.pipeline.p22_biotech_ma.ingest.acquirer_config import AcquirerConfig
 from src.ml.pipeline.p22_biotech_ma.ingest.entity_resolution import UniverseCandidate, quarter_end_date
 from src.ml.pipeline.p22_biotech_ma.scoring.score_run import resolve_acquirers, score_universe, select_targets
@@ -169,6 +170,7 @@ def run_snapshot(
     labels: DealLabels,
     scoring_config: ScoringConfig,
     acquirers: Sequence[AcquirerConfig],
+    deal_history: Optional[DealAreaHistory] = None,
 ) -> Dict[str, Any]:
     """
     Score one snapshot and build every ranking. Writes nothing.
@@ -187,7 +189,7 @@ def run_snapshot(
     excluded = {**excluded, "pending_deal": sum(1 for cik in cik_universe if cik in by_cik and by_cik[cik]["company_id"] in pending),
                 "no_company_row": sum(1 for cik in cik_universe if cik not in by_cik)}
 
-    result = score_universe(repo, as_of, scoring_config, acquirers, target_ids=targets)
+    result = score_universe(repo, as_of, scoring_config, acquirers, target_ids=targets, deal_history=deal_history)
     features = baseline_features(targets, as_of, ctx)
     tier0_ids = {r["company_id"] for r in result.rows if r["tier"] == 0}
     target_set = set(targets)
@@ -233,6 +235,7 @@ def run_backtest(
     result = BacktestResult(all_names=MetricsTable(ks=window.ks), tier0=MetricsTable(ks=window.ks),
                             learned_window=MetricsTable(ks=window.ks))
     ranker = WalkForwardRanker(params=learned_params or LearnedParams())
+    deal_history = DealAreaHistory(repo, labels.deals)  # one instance: each past deal's area is computed once
     dates = snapshot_dates(window)
     if not dates:
         _logger.warning("No uncensored snapshots between %s and %s (labels complete through %s)",
@@ -242,7 +245,7 @@ def run_backtest(
         if not ciks:
             _logger.warning("No DERA quarter on or before %s — snapshot skipped", as_of)
             continue
-        snap = run_snapshot(repo, as_of, ciks, labels, scoring_config, acquirers)
+        snap = run_snapshot(repo, as_of, ciks, labels, scoring_config, acquirers, deal_history)
         targets, positives = snap["targets"], snap["positives"]
         tier0_ids = snap["tier0_ids"]
         rows = score_rows_for_snapshot(as_of, snap["rows"], snap["features"], positives, snap["pe_positives"])
