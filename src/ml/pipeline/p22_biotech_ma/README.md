@@ -6,6 +6,10 @@ by likelihood of acquisition within 12–24 months, and surfaces the reasoning b
 See `docs/pipeline-specification.md` for the full technical specification (v0.5) and
 `docs/implementation-plan.md` for how it maps onto this repo's existing infrastructure.
 
+**Status: parked (2026-11-10).** The backtest shows acquisition prediction works modestly but does not
+translate into returns beyond a generic size/pipeline factor; scheduled jobs keep running, no further
+development. See `docs/Tasks.md`.
+
 **Non-goals:** no order execution, no price prediction, no investment advice, no clinical-outcome
 prediction. Every exported artifact carries the disclaimer in spec §11.
 

@@ -1,5 +1,20 @@
 # Tasks
 
+## Status: PARKED (2026-11-10)
+
+Development stopped after the portfolio backtest. The learned model predicts acquisitions (lift@50 1.76 vs
+naive 1.56) but carries no return signal (monthly rank IC with 24-month holding return +0.03). The return
+signal that exists is a generic size / pipeline-depth factor: a two-feature rule (size band, then Phase II+
+assets) matches a return-trained model, and the M&A-specific features (acquirer demand, deal heat) add about
+nothing. Numbers in the ADDED/CHANGED 2026-11-10 entries below.
+
+Still running unchanged: the 21 scheduled P22 jobs, including the weekly backtest email (Saturday) and the
+label-review digest (Monday), as a cheap record of whether anything changes as labels accumulate.
+Known open flaw: daily dossiers are still built for the composite top 25, a ranking at -14 pts vs the
+universe in the portfolio backtest. Untested ideas if resumed: a return ranking with price features
+(momentum, volatility, short interest) judged against the size/pipeline rule; deal arbitrage on announced
+deals (Tier 3) as a separate project.
+
 ## Decisions needed (walk through with a domain reviewer before relying on the affected features)
 
 These are business/domain calls this session could not make from the code or spec text alone —
@@ -958,7 +973,21 @@ use in the code/config; this section exists so they're all in one place to walk 
   bought at each snapshot and held 24 months or to its deal, and reports each ranking's top 25/50 against
   the universe (`portfolio_*.csv`, the weekly email, `learned_top25_*` in the job result). Open: no
   delisting returns (last close, bounded by the -100% stress); no dividends; returns not annualised;
-  overlapping monthly cohorts, so `beat_share` is not a significance test. First Pi run pending.
+  overlapping monthly cohorts, so `beat_share` is not a significance test.
+  First Pi run (aab25d1, 75 learned-window snapshots, top 25 / top 50 mean holding return, excess vs universe
+  +13.1%): naive +28.7% / +18.2% (+15.6 / +5.2 pts), catalyst +22.8% / +19.7%, learned +20.5% / +20.3%
+  (+7.4 / +7.2), composite -0.7% / -3.1% (-13.8 / -16.1). Only 66% of target-snapshots have an entry price.
+  Returns are lottery-shaped: per-pick median -35% for `held`, -94% for `price_ended` (so the -100% stress
+  barely moves anything), +52% for `deal`; learned top-25 median pick -15%, 41% of picks up, mean +12.9%
+  without the best 1% of picks; naive's top 25 is only 57 distinct names. Learned predicts deals best but
+  naive earns more: deal probability alone is not the return target (spec §5.3's `expected_value`).
+  Offline return-model replay (2026-11-10, walk-forward, train on rows >= 24 months old, 64 snapshots
+  2019-08..2024-11, universe +6.9%; monthly rank IC with `hold_return`, t roughly adjusted for overlap):
+  learned P(deal) IC +0.03 (t 1.1), i.e. no return signal; naive +0.11 (2.5); regressor on within-month return
+  percentile +0.16 (5.2), top 25 +11.3 pts in both halves; EV form (P x E[deal] + (1-P) x E[no deal]) +17.4 pts
+  but median pick -37% (lottery). Single-feature ICs: size band +0.16, Phase II+ asset count +0.13, phase
+  +0.10, runway +0.06; acquirer demand and deal heat about 0. A plain rule (size band, then Phase II+ assets)
+  has IC +0.20. Conclusion: the return signal is a generic size/pipeline-depth factor, not the M&A features.
 - **CHANGED 2026-11-10: learned model uses `cash_runway_latest_q_months` instead of `cash_runway_months`.**
   First weekly run on the Pi (4c70203, labels through 2026-11-06): learned 1.573 vs naive 1.558 @50
   (f09b94d run 1.621; area flag identical row for row, so the drop is the fact-order tie fix or new data,
