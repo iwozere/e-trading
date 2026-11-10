@@ -407,6 +407,13 @@ because trial linkage only covers single-intervention trials.
   (Monday) emails the review queue, since unreviewed candidates hold the label cut-off back.
 - **Return labels** for M7: `upfront / close(as_of) - 1`, the close rescaled to the announcement's
   share basis, CVRs at zero (`p22_cvr_policy.yaml`), None for price-quality suspects.
+- **Portfolio returns** (spec §5.3, 2026-11-10, `backtest/holding_returns.py`, `backtest/portfolio.py`):
+  every target bought at the snapshot close (known by `as_of`, price-quality suspects excluded) and held
+  24 months, or paid the upfront consideration of a strategic or PE deal announced in that window. A
+  series that stops early is valued at its last close (`price_ended`), with a stressed variant at -100%,
+  since prices of failed companies are the gap the vintage has. The learned, naive, catalyst and model
+  rankings each buy their top 25/50 investable names equal-weighted; the benchmark is all investable
+  targets. Outputs `portfolio_all.csv`, `portfolio_learned_window.csv`, `hold_*` columns in `scores.csv`.
 - **Inherited lookahead gaps:** trials are not bitemporal (phases and completion dates are today's),
   and a DERA quarter is used from its quarter end although it is published weeks later.
 

@@ -81,6 +81,24 @@ def _metrics(learned50: float, naive50: float) -> List[Dict[str, Any]]:
     return rows
 
 
+def _portfolio() -> List[Dict[str, Any]]:
+    return [
+        {"ranking": "universe", "k": "all", "mean_return": 0.05, "excess": 0.0, "stressed_excess": 0.0, "beat_share": None,
+         "deal_share": 0.04, "price_ended_share": 0.2},
+        {"ranking": "learned", "k": 25, "mean_return": 0.18, "excess": 0.13, "stressed_excess": 0.09, "beat_share": 0.7,
+         "deal_share": 0.12, "price_ended_share": 0.25},
+    ]
+
+
+def test_backtest_report_shows_portfolio_returns():
+    summary = {"metrics_learned_window": _metrics(1.62, 1.54), "portfolio_learned_window": _portfolio()}
+    _, text, body = backtest_report.build_backtest_report(summary, None, {"saved": False})
+    assert "held 24 months or to the deal" in body and "+13.0%" in body and "+9.0%" in body
+    assert "Portfolio top 25, learned: 18.0% (+13.0% vs universe)" in text
+    assert backtest_report.portfolio_cell(summary, "universe", "all", "mean_return") == 0.05
+    assert backtest_report.portfolio_cell({}, "learned", 25, "excess") is None
+
+
 def test_backtest_report_headline_and_change_since_last_run():
     summary = {"labels_complete_through": "2026-11-06", "snapshots": 103, "deals_entered": 532,
                "metrics_learned_window": _metrics(1.62, 1.54)}
@@ -196,7 +214,8 @@ def test_run_backtest_uses_review_cutoff_saves_model_and_emails(monkeypatch, tmp
     def fake_execute(start, end, labels_through, step_months, ks, out_dir):
         seen["labels_through"] = labels_through
         out_dir.mkdir(parents=True)
-        return SimpleNamespace(score_rows=[]), {"snapshots": 100, "metrics_learned_window": _metrics(1.62, 1.54)}
+        return SimpleNamespace(score_rows=[]), {"snapshots": 100, "metrics_learned_window": _metrics(1.62, 1.54),
+                                                "portfolio_learned_window": _portfolio()}
 
     monkeypatch.setattr(run_backtest, "execute", fake_execute)
     monkeypatch.setattr(run_backtest, "fit_final_model", lambda rows, through: _trained_model())
@@ -206,6 +225,7 @@ def test_run_backtest_uses_review_cutoff_saves_model_and_emails(monkeypatch, tmp
     assert seen["labels_through"] == date(2026, 9, 30)
     assert report["success"] and report["model_saved"] and report["email_queued"] and report["beats_naive_at_50"]
     assert report["learned_lift_at_50"] == 1.62 and report["deal_candidates_pending"] == 1
+    assert report["learned_top25_excess"] == 0.13 and report["universe_return"] == 0.05
     assert model_path.exists() and (tmp_path / "2026-11-14" / "backtest" / "learned_model.pkl").exists()
     assert "1.62" in seen["title"]
 

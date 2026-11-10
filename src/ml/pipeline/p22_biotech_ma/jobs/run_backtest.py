@@ -35,7 +35,14 @@ from src.ml.pipeline.p22_biotech_ma.backtest.metrics import DEFAULT_KS
 from src.ml.pipeline.p22_biotech_ma.cli.backtest_cli import execute
 from src.ml.pipeline.p22_biotech_ma.config import BACKTEST_START_YEAR, LEARNED_MODEL_PATH, RESULTS_DIR
 from src.ml.pipeline.p22_biotech_ma.jobs.run_common import setup_run_logging
-from src.ml.pipeline.p22_biotech_ma.outputs.backtest_report import HEADLINE_K, build_backtest_report, lifts, previous_summary
+from src.ml.pipeline.p22_biotech_ma.outputs.backtest_report import (
+    HEADLINE_K,
+    PORTFOLIO_HEADLINE_K,
+    build_backtest_report,
+    lifts,
+    portfolio_cell,
+    previous_summary,
+)
 from src.ml.pipeline.p22_biotech_ma.outputs.email_notify import queue_email
 from src.notification.logger import setup_logger
 
@@ -80,11 +87,19 @@ def run(labels_through: Optional[date] = None, send_email: bool = True, user_id:
         "learned_lift_at_50": round(learned50, 3) if learned50 is not None else None,
         "naive_lift_at_50": round(naive50, 3) if naive50 is not None else None,
         "beats_naive_at_50": learned50 is not None and naive50 is not None and learned50 > naive50,
+        "learned_top25_return": _round(portfolio_cell(summary, "learned", PORTFOLIO_HEADLINE_K, "mean_return")),
+        "learned_top25_excess": _round(portfolio_cell(summary, "learned", PORTFOLIO_HEADLINE_K, "excess")),
+        "learned_top25_stressed_excess": _round(portfolio_cell(summary, "learned", PORTFOLIO_HEADLINE_K, "stressed_excess")),
+        "universe_return": _round(portfolio_cell(summary, "universe", "all", "mean_return")),
         "model_saved": model_info["saved"],
         "email_queued": email_queued,
     }
     _logger.info("Weekly backtest complete: %s", report)
     return report
+
+
+def _round(value: Optional[float]) -> Optional[float]:
+    return round(value, 3) if value is not None else None
 
 
 def main(argv: Optional[List[str]] = None) -> Dict[str, Any]:

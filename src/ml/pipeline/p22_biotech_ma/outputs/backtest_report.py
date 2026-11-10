@@ -3,7 +3,8 @@ P22 — the weekly backtest email (2026-11-09).
 
 Lift of the learned ranking against the §0.3 baselines and the Phase 1 composite, over the
 snapshots the learned model ranked (`metrics_learned_window`, the like-for-like table), with the
-change since the previous weekly run and per-block attribution.
+change since the previous weekly run and per-block attribution, and (2026-11-10) the portfolio
+returns of each ranking's top k held 24 months or to the deal (`portfolio_learned_window`).
 """
 
 from __future__ import annotations
@@ -25,6 +26,15 @@ MAIN_RANKINGS = ("learned", "naive_informed", "catalyst_proximity", "model")
 BLOCK_PREFIX = "block:"
 REPORT_KS = (25, 50, 200)
 HEADLINE_K = 50
+PORTFOLIO_HEADLINE_K = 25
+
+
+def portfolio_cell(summary: Mapping[str, Any], ranking: str, k: Any, key: str) -> Optional[float]:
+    """One value of the learned-window portfolio table (`k` is "all" for the universe row)."""
+    for row in summary.get("portfolio_learned_window") or []:
+        if row.get("ranking") == ranking and str(row.get("k")) == str(k):
+            return row.get(key)
+    return None
 
 
 def lifts(metric_rows: Sequence[Mapping[str, Any]]) -> Dict[str, Dict[int, Optional[float]]]:
@@ -51,6 +61,21 @@ def _fmt(value: Optional[float], signed: bool = False) -> str:
     if value is None:
         return "n/a"
     return f"{value:+.2f}" if signed else f"{value:.2f}"
+
+
+def _pct(value: Optional[float], signed: bool = False) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value * 100:+.1f}%" if signed else f"{value * 100:.1f}%"
+
+
+def _portfolio_rows(summary: Mapping[str, Any]) -> List[List[Any]]:
+    rows: List[List[Any]] = []
+    for r in summary.get("portfolio_learned_window") or []:
+        rows.append([r.get("ranking"), r.get("k"), _pct(r.get("mean_return")), _pct(r.get("excess"), signed=True),
+                     _pct(r.get("stressed_excess"), signed=True), _pct(r.get("beat_share")), _pct(r.get("deal_share")),
+                     _pct(r.get("price_ended_share"))])
+    return rows
 
 
 def _delta(now: Optional[float], before: Optional[float]) -> Optional[float]:
@@ -101,11 +126,19 @@ def build_backtest_report(summary: Mapping[str, Any], previous: Optional[Mapping
         + html_table(headers, _ranking_rows(current, before, MAIN_RANKINGS))
         + "<h4>Each composite block alone (attribution)</h4>"
         + html_table(headers, _ranking_rows(current, before, blocks))
+        + "<h4>Portfolio: top k bought at each snapshot, held 24 months or to the deal</h4>"
+        + html_table(["ranking", "k", "mean return", "vs universe", "vs universe, stressed", "beat universe",
+                      "exited by deal", "price ended"], _portfolio_rows(summary))
+        + "<p>Equal weight, total holding-period return averaged over snapshots (they overlap). Stressed: every "
+          "series that stopped trading without a deal counted at -100% instead of its last close.</p>"
         + "<p>Lift = precision in the top k divided by the base rate (1.00 = random). "
           "Full tables: <code>results/p22_biotech_ma/&lt;date&gt;/backtest/</code>.</p>"
     )
     text_lines = [title, ""] + [f"{name:24s} " + "  ".join(f"@{k} {_fmt(current.get(name, {}).get(k))}" for k in REPORT_KS)
                                 for name in MAIN_RANKINGS]
+    learned_excess = portfolio_cell(summary, "learned", PORTFOLIO_HEADLINE_K, "excess")
+    text_lines += ["", f"Portfolio top {PORTFOLIO_HEADLINE_K}, learned: {_pct(portfolio_cell(summary, 'learned', PORTFOLIO_HEADLINE_K, 'mean_return'))} "
+                       f"({_pct(learned_excess, signed=True)} vs universe)"]
     text_lines += ["", f"Labels complete through {summary.get('labels_complete_through')}; live model: {_model_line(model_info)}"]
     return title, "\n".join(text_lines), body
 

@@ -952,6 +952,13 @@ use in the code/config; this section exists so they're all in one place to walk 
   review items, sent only when something is pending (`outputs/label_review_digest.py`). Emails go to the
   scheduler system user through `outputs/email_notify.py`. On the Pi: `register_jobs`, then a first manual
   `run_backtest.py` so scoring has a model before Saturday.
+- **ADDED 2026-11-10: portfolio return backtest (spec §5.3).** The lift tables count acquired names in the
+  top k and say nothing about the rest; `return_labels.csv` covers acquired names only (median +68% from the
+  last snapshot before the deal, 24% of rows below the deal price). The harness now values every target
+  bought at each snapshot and held 24 months or to its deal, and reports each ranking's top 25/50 against
+  the universe (`portfolio_*.csv`, the weekly email, `learned_top25_*` in the job result). Open: no
+  delisting returns (last close, bounded by the -100% stress); no dividends; returns not annualised;
+  overlapping monthly cohorts, so `beat_share` is not a significance test. First Pi run pending.
 - **CHANGED 2026-11-10: learned model uses `cash_runway_latest_q_months` instead of `cash_runway_months`.**
   First weekly run on the Pi (4c70203, labels through 2026-11-06): learned 1.573 vs naive 1.558 @50
   (f09b94d run 1.621; area flag identical row for row, so the drop is the fact-order tie fix or new data,

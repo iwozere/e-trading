@@ -1402,6 +1402,34 @@ class P22Repo:
             return None
         return {"trade_date": row.trade_date, "close_raw": float(row.close_raw), "vendor": row.vendor}
 
+    def get_raw_close_series(self, company_id: int) -> List[Dict[str, Any]]:
+        """
+        Every RAW close for `company_id`, oldest first, one per trading day.
+
+        For the portfolio backtest (`backtest/holding_returns.py`), which needs each company's whole
+        series and filters on `known_from` itself. Rows with a NULL close or `known_from` are left out,
+        as in `get_latest_raw_close_as_of`; when two vendors have the same day, the first by vendor
+        name is kept.
+
+        Returns:
+            `[{"trade_date": date, "close_raw": float, "known_from": datetime}, ...]`.
+        """
+        rows = self.session.execute(
+            select(P22PriceDaily.trade_date, P22PriceDaily.close_raw, P22PriceDaily.known_from)
+            .where(
+                P22PriceDaily.company_id == company_id,
+                P22PriceDaily.close_raw.is_not(None),
+                P22PriceDaily.known_from.is_not(None),
+            )
+            .order_by(P22PriceDaily.trade_date, P22PriceDaily.vendor)
+        ).all()
+        out: List[Dict[str, Any]] = []
+        for row in rows:
+            if out and out[-1]["trade_date"] == row.trade_date:
+                continue
+            out.append({"trade_date": row.trade_date, "close_raw": float(row.close_raw), "known_from": row.known_from})
+        return out
+
     def get_adjusted_close(
         self,
         company_id: int,

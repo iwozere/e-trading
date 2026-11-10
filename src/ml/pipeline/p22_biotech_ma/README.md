@@ -94,7 +94,9 @@ python -m src.ml.pipeline.p22_biotech_ma.cli.lookahead_audit_cli --samples 200  
 Weekly automation (2026-11-09): `P22 Weekly Backtest` (Saturday 06:00 UTC) runs the backtest with the
 label cut-off taken from the review queue, retrains the live learned model that `P22 Scoring` ranks the
 watchlist with, and emails lift vs the baselines; `P22 Label Review Digest` (Monday 07:30 UTC) emails the
-deal candidates waiting for review. Both can be run by hand:
+deal candidates waiting for review. Since 2026-11-10 the backtest also reports portfolio returns: each
+ranking's top 25/50 bought at every snapshot and held 24 months or to the deal, against the whole universe
+(`portfolio_learned_window.csv`). Both can be run by hand:
 
 ```bash
 python src/ml/pipeline/p22_biotech_ma/jobs/run_backtest.py --no-email           # about an hour on the Pi

@@ -93,6 +93,14 @@ def _log_table(title: str, rows: Sequence[Dict[str, Any]]) -> None:
                      _fmt(r["lift"]), _fmt(r["recall"]), _fmt(r["random_recall"]))
 
 
+def _log_portfolio(title: str, rows: Sequence[Dict[str, Any]]) -> None:
+    _logger.info("%s", title)
+    for r in rows:
+        _logger.info("  %-20s k=%-3s mean=%s universe=%s excess=%s beat=%s stressed_excess=%s deal=%s price_ended=%s",
+                     r["ranking"], r["k"], _fmt(r["mean_return"]), _fmt(r["universe_return"]), _fmt(r["excess"]),
+                     _fmt(r["beat_share"]), _fmt(r["stressed_excess"]), _fmt(r["deal_share"]), _fmt(r["price_ended_share"]))
+
+
 def _fmt(value: Optional[float]) -> str:
     return "n/a" if value is None else f"{value:.3f}"
 
@@ -108,6 +116,9 @@ def write_results(result: BacktestResult, out_dir: Path, meta: Dict[str, Any]) -
     _write_csv(out_dir / "snapshots.csv", result.snapshots)
     _write_csv(out_dir / "return_labels.csv", result.return_rows)
     _write_csv(out_dir / "scores.csv", result.score_rows)
+    portfolio_all, portfolio_window = result.portfolio_all.as_rows(), result.portfolio_learned_window.as_rows()
+    _write_csv(out_dir / "portfolio_all.csv", portfolio_all)
+    _write_csv(out_dir / "portfolio_learned_window.csv", portfolio_window)
     summary = {
         **meta,
         "snapshots": len(result.snapshots),
@@ -117,11 +128,14 @@ def write_results(result: BacktestResult, out_dir: Path, meta: Dict[str, Any]) -
         "metrics_all": all_rows,
         "metrics_tier0": tier0_rows,
         "metrics_learned_window": window_rows,
+        "portfolio_all": portfolio_all,
+        "portfolio_learned_window": portfolio_window,
     }
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2, default=str), encoding="utf-8")
     _log_table("Backtest — all names", all_rows)
     _log_table("Backtest — Tier 0 names (spec §9: the honest measure of Blocks A–F)", tier0_rows)
     _log_table("Backtest — snapshots ranked by the learned model only (like-for-like)", window_rows)
+    _log_portfolio("Portfolio — top k held 24 months or to the deal, learned window", portfolio_window)
     _logger.info("Success criteria, all names: %s", summary["criteria_all_names"])
     _logger.info("Success criteria, Tier 0: %s", summary["criteria_tier0"])
     _logger.info("Success criteria, learned window: %s", summary["criteria_learned_window"])

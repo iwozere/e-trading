@@ -20,6 +20,10 @@ For each monthly snapshot `as_of`:
    just those snapshots (`learned_window`) for a like-for-like comparison.
 5. **Metrics** at each k, for all names and separately for Tier 0 names (spec §9: Tier 0 is the
    honest measure of Blocks A–F), pooled over snapshots (`metrics`).
+6. **Portfolio returns** (spec §5.3, 2026-11-10): every target is valued as if bought at the
+   snapshot close and held 24 months or until its deal pays (`holding_returns`), and each main
+   ranking's top k investable names are compared with all of them (`portfolio`), over all snapshots
+   and over the learned window. The per-name return is kept in `score_rows` (`hold_*` columns).
 
 Snapshots whose 24-month label window runs past `labels_complete_through` are skipped (censored).
 The spec's 24-month embargo (§5.5, §8.4) separates training from test data: the composite has
@@ -43,9 +47,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.ml.pipeline.p22_biotech_ma.backtest import baselines
+from src.ml.pipeline.p22_biotech_ma.backtest.holding_returns import HoldingReturns, score_row_columns
 from src.ml.pipeline.p22_biotech_ma.backtest.labels import CvrPolicy, DealLabels, add_months, is_censored, return_labels
 from src.ml.pipeline.p22_biotech_ma.backtest.learned import LearnedParams, WalkForwardRanker, rank_by_probability
 from src.ml.pipeline.p22_biotech_ma.backtest.metrics import DEFAULT_KS, MetricsTable
+from src.ml.pipeline.p22_biotech_ma.backtest.portfolio import PortfolioTable
 from src.ml.pipeline.p22_biotech_ma.features import block_b, block_c
 from src.ml.pipeline.p22_biotech_ma.features.context import FeatureContext
 from src.ml.pipeline.p22_biotech_ma.features.ta_demand import DealAreaHistory
@@ -59,6 +65,8 @@ _logger = setup_logger(__name__)
 
 BLOCK_RANKING_PREFIX = "block:"
 LEARNED_RANKING = "learned"
+# Rankings the portfolio backtest buys (blocks alone are attribution, not strategies).
+PORTFOLIO_RANKINGS = (LEARNED_RANKING, "naive_informed", "catalyst_proximity", "model")
 
 
 @dataclass(frozen=True)
@@ -74,7 +82,7 @@ class BacktestWindow:
 
 @dataclass
 class BacktestResult:
-    """Pooled metrics for both populations plus per-snapshot detail and return labels."""
+    """Pooled metrics for both populations, portfolio returns, per-snapshot detail and return labels."""
 
     all_names: MetricsTable
     tier0: MetricsTable
@@ -82,6 +90,8 @@ class BacktestResult:
     snapshots: List[Dict[str, Any]] = field(default_factory=list)
     return_rows: List[Dict[str, Any]] = field(default_factory=list)
     score_rows: List[Dict[str, Any]] = field(default_factory=list)
+    portfolio_all: PortfolioTable = field(default_factory=PortfolioTable)
+    portfolio_learned_window: PortfolioTable = field(default_factory=PortfolioTable)
 
 
 def snapshot_dates(window: BacktestWindow) -> List[date]:
@@ -244,6 +254,7 @@ def run_backtest(
                             learned_window=MetricsTable(ks=window.ks))
     ranker = WalkForwardRanker(params=learned_params or LearnedParams())
     deal_history = DealAreaHistory(repo, labels.deals)  # one instance: each past deal's area is computed once
+    holding = HoldingReturns(repo, labels.deals, cvr_policy, window.labels_complete_through)
     dates = snapshot_dates(window)
     if not dates:
         _logger.warning("No uncensored snapshots between %s and %s (labels complete through %s)",
@@ -266,6 +277,13 @@ def run_backtest(
             for row in rows:
                 row["learned_p"] = probabilities.get(row["company_id"])
         _add_rankings(result.all_names, snap["rankings"], positives, len(targets))
+        held = holding.for_snapshot(targets, as_of)
+        bought = {name: snap["rankings"][name] for name in PORTFOLIO_RANKINGS if name in snap["rankings"]}
+        result.portfolio_all.add_snapshot(bought, held)
+        if probabilities is not None:
+            result.portfolio_learned_window.add_snapshot(bought, held)
+        for row in rows:
+            row.update(score_row_columns(held, row["company_id"]))
         _add_rankings(result.tier0, snap["tier0_rankings"], positives & tier0_ids, len(tier0_ids))
         result.return_rows.extend(return_labels(repo, labels, sorted(positives), as_of, cvr_policy))
         result.score_rows.extend(rows)
@@ -279,6 +297,7 @@ def run_backtest(
             "ranked_by_model": len(snap["rankings"]["model"]),
             "tier0": len(tier0_ids),
             "positives": len(positives),
+            "investable": len(held),
             "pe_positives": len(snap["pe_positives"]),
             "model_hits_top50": len(top50 & positives),
             "learned_hits_top50": len(set(snap["rankings"][LEARNED_RANKING][:50]) & positives) if probabilities is not None else None,

@@ -181,6 +181,21 @@ def test_get_latest_raw_close_as_of_ignores_null_known_from(db_session) -> None:
     assert repo.get_latest_raw_close_as_of(company_id, date(2026, 9, 5)) is None
 
 
+def test_get_raw_close_series_is_ordered_one_row_per_day_and_skips_unknown(db_session) -> None:
+    """The portfolio backtest's price load: oldest first, one row per day (first vendor by name), no NULL `known_from`."""
+    repo = P22Repo(db_session)
+    company_id = repo.upsert_company(cik="0000000123", name="Series Inc", role="target")
+    known = datetime(2026, 9, 10, tzinfo=timezone.utc)
+    repo.upsert_price_daily(company_id=company_id, trade_date=date(2026, 9, 3), vendor="yfinance", close_raw=11.0, known_from=known)
+    repo.upsert_price_daily(company_id=company_id, trade_date=date(2026, 9, 2), vendor="yfinance", close_raw=10.5, known_from=known)
+    repo.upsert_price_daily(company_id=company_id, trade_date=date(2026, 9, 2), vendor="fmp", close_raw=10.0, known_from=known)
+    repo.upsert_price_daily(company_id=company_id, trade_date=date(2026, 9, 4), vendor="fmp", close_raw=12.0)
+
+    series = repo.get_raw_close_series(company_id)
+    assert [(r["trade_date"], r["close_raw"]) for r in series] == [(date(2026, 9, 2), 10.0), (date(2026, 9, 3), 11.0)]
+    assert series[0]["known_from"] == known
+
+
 def test_count_phase3_assets_by_therapeutic_area(db_session) -> None:
     """`features/block_a.py`'s `pipeline_gap_by_ta` input: counts DISTINCT assets with >=1 linked
     Phase III trial, grouped by TA — an asset with two Phase III trials counts once, and a

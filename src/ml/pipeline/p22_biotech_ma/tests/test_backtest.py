@@ -249,6 +249,12 @@ class _HarnessRepo:
     def list_companies_full(self) -> List[Dict[str, Any]]:
         return self.companies
 
+    def get_raw_close_series(self, company_id: int) -> List[Dict[str, Any]]:
+        return []  # no prices: nobody is investable, the portfolio tables stay empty
+
+    def get_splits_as_of(self, company_id: int, as_of: date) -> List[Dict[str, Any]]:
+        return []
+
 
 def test_run_backtest_keeps_later_acquired_inactive_company_and_drops_pending(monkeypatch):
     seen_targets: List[List[int]] = []
@@ -291,6 +297,8 @@ def test_run_backtest_keeps_later_acquired_inactive_company_and_drops_pending(mo
     assert [(r["company_id"], r["positive"]) for r in result.score_rows] == [(1, 1), (2, 0)]
     assert result.learned_window.as_rows() == []  # one snapshot: no 24-month-old training rows yet
     assert all("learned_p" not in r for r in result.score_rows)
+    assert all(r["hold_return"] is None and r["hold_exit"] is None for r in result.score_rows)
+    assert snap["investable"] == 0 and result.portfolio_all.as_rows() == []
     block_names = {r["ranking"] for r in result.all_names.as_rows()} - {"model", "naive_informed", "catalyst_proximity"}
     assert block_names == {harness.BLOCK_RANKING_PREFIX + b for b in load_scoring_config().composite}
 
