@@ -952,6 +952,14 @@ use in the code/config; this section exists so they're all in one place to walk 
   review items, sent only when something is pending (`outputs/label_review_digest.py`). Emails go to the
   scheduler system user through `outputs/email_notify.py`. On the Pi: `register_jobs`, then a first manual
   `run_backtest.py` so scoring has a model before Saturday.
+- **CHANGED 2026-11-10: learned model uses `cash_runway_latest_q_months` instead of `cash_runway_months`.**
+  First weekly run on the Pi (4c70203, labels through 2026-11-06): learned 1.573 vs naive 1.558 @50
+  (f09b94d run 1.621; area flag identical row for row, so the drop is the fact-order tie fix or new data,
+  unverified because both runs wrote `2026-11-09/`). Replay on its `scores.csv`, lift @25/@50/@200 (second
+  half): current 1.53/1.57/1.40 (1.32/1.60/1.37); latest-quarter added 1.49/1.57/1.40; latest-quarter in place
+  of trailing 1.92/1.76/1.43 (1.54/1.66/1.39); no runway 1.96/1.80/1.40 (1.36/1.62/1.41). Chosen from four
+  sets on one window, so some of the gain may be selection. The saved model no longer matches the feature
+  list after deploy (scoring falls back to the composite) until `run_backtest.py` retrains it.
 - **ADDED 2026-11-09: `cash_runway_latest_q_months`** (latest quarter's burn alone) as a `scores.csv` column
   (`harness.baseline_features`), not a model feature. Offline, replacing the trailing-4Q runway with the
   approximate step 2 version gave 1.80/1.70/1.38 over the window but 1.42 vs 1.48 @25 in the second half, so

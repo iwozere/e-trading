@@ -16,6 +16,11 @@ therapeutic-area features 1.52/1.43/1.34; plus `ta_lead_area_known` and `ta_acqu
 1.66/1.62/1.36 (naive-informed 1.61/1.54/1.33). The other area features stay in `scores.csv` for
 analysis but not in the model.
 
+**Runway** (2026-11-10 replay on the first weekly run's `scores.csv`, same 75 snapshots): the
+latest quarter's burn (`cash_runway_latest_q_months`) in place of the trailing four quarters'
+1.92/1.76/1.43 vs 1.53/1.57/1.40, and ahead in the second half too (1.54/1.66/1.39 vs
+1.32/1.60/1.37); both together 1.49/1.57/1.40. The naive baseline keeps the trailing runway (§0.3).
+
 **Price-gap leak.** Companies with no market cap at `as_of` were acquired about twice as often as
 the rest (2026-11-09 analysis): the FMP price history mostly lacks names that later delisted, so a
 missing price says the company is about to exit. The price-derived features (`PRICE_FEATURES`) are
@@ -57,7 +62,7 @@ LEARNED_FEATURES = (
     "f_asset_count_ph2plus",
     "f_catalyst_window",
     "f_days_to_next_catalyst",
-    "f_cash_runway_months",
+    "f_cash_runway_latest_q_months",
     "f_dilution_risk",
     "f_is_foreign_domiciled",
     "f_ev_to_cash",

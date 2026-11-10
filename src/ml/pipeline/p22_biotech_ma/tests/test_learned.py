@@ -48,10 +48,10 @@ def test_feature_matrix_fills_only_price_features():
 
 
 def test_feature_matrix_treats_non_numeric_and_infinite_as_missing():
-    rows = [{"f_phase_max": "x", "f_cash_runway_months": float("inf")}]
+    rows = [{"f_phase_max": "x", "f_cash_runway_latest_q_months": float("inf")}]
     matrix = feature_matrix(rows, {})
     assert math.isnan(matrix[0, LEARNED_FEATURES.index("f_phase_max")])
-    assert math.isnan(matrix[0, LEARNED_FEATURES.index("f_cash_runway_months")])
+    assert math.isnan(matrix[0, LEARNED_FEATURES.index("f_cash_runway_latest_q_months")])
 
 
 def test_price_fill_values_use_median_of_known():
@@ -124,3 +124,8 @@ def test_load_model_ignores_missing_file_and_other_feature_lists(tmp_path):
     model.features = ("f_phase_max",)
     save_model(model, tmp_path / "old.pkl")
     assert load_model(tmp_path / "old.pkl") is None
+
+
+def test_learned_features_use_latest_quarter_runway_not_trailing():
+    assert "f_cash_runway_latest_q_months" in LEARNED_FEATURES
+    assert "f_cash_runway_months" not in LEARNED_FEATURES
