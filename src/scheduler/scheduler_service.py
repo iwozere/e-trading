@@ -965,8 +965,6 @@ class SchedulerService:
         # argparse usage error if it were appended unconditionally.
         _SCRIPTS_ACCEPTING_USER_ID = {
             "src/ml/pipeline/p05_ai_selector/run_p05_scan.py",
-            "src/ml/pipeline/p06_emps2/run_emps2_scan.py",
-            "src/ml/pipeline/p10_emps3/run_emps3_scan.py",
             "src/ml/pipeline/p17_penny_stocks/run_p17.py",
             "src/ml/pipeline/p18_institutional_flow_tracker/run_p18_scan.py",
             "src/ml/pipeline/p19_penny_intraday/run_p19.py",
@@ -1016,7 +1014,7 @@ class SchedulerService:
 
             # Automatically inject user_id if present in the schedule and the
             # script's CLI actually accepts --user-id (see _SCRIPTS_ACCEPTING_USER_ID).
-            # This ensures scripts like EMPS2 pipeline receive the user context.
+            # This ensures scripts like the P05 pipeline receive the user context.
             if schedule.user_id and script_rel in _SCRIPTS_ACCEPTING_USER_ID:
                 cmd.extend(["--user-id", str(schedule.user_id)])
 

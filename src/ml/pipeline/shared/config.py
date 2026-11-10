@@ -20,36 +20,6 @@ class FundamentalFilterConfig(BaseFilterConfig):
 
 
 @dataclass
-class VolatilityFilterConfig(BaseFilterConfig):
-    """Configuration for volatility filtering."""
-
-    min_price: float = 1.0
-    min_volatility_threshold: float = 0.02
-    min_price_range: float = 0.05
-    lookback_days: int = 15
-    interval: str = "1h"
-    atr_period: int = 14
-    min_vol_zscore: float = 1.2
-    min_vol_rv_ratio: float = 0.3
-    min_z_vol_delta: float = 1.5
-    min_z_intensity: float = 1.0
-    min_z_gap: float = 0.5
-    min_z_atr: float = 0.5
-    min_close_pos: float = 0.75
-
-
-@dataclass
-class SentimentFilterConfig(BaseFilterConfig):
-    """Configuration for sentiment filtering."""
-
-    min_mentions_24h: int = 10
-    min_sentiment_score: float = 0.2
-    max_bot_pct: float = 0.3
-    min_virality_index: float = 1.5
-    min_unique_authors: int = 5
-
-
-@dataclass
 class UniverseConfig(BaseFilterConfig):
     """Configuration for universe downloading."""
 

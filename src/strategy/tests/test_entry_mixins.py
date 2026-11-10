@@ -21,7 +21,6 @@ from src.strategy.entry.bb_volume_supertrend_entry_mixin import BBVolumeSupertre
 from src.strategy.entry.eom_breakout_entry_mixin import EOMBreakoutEntryMixin
 from src.strategy.entry.eom_macd_breakout_entry_mixin import EOMMAcdBreakoutEntryMixin
 from src.strategy.entry.eom_pullback_entry_mixin import EOMPullbackEntryMixin
-from src.strategy.entry.hmm_lstm_entry_mixin import HMMLSTMEntryMixin
 from src.strategy.entry.rsi_bb_entry_mixin import RSIBBEntryMixin
 from src.strategy.entry.rsi_bb_volume_entry_mixin import RSIBBVolumeEntryMixin
 from src.strategy.entry.rsi_ichimoku_entry_mixin import RSIIchimokuEntryMixin
@@ -681,32 +680,3 @@ class TestEOMMAcdBreakoutEntryMixin:
 
     def test_minimum_lookback_positive(self):
         assert self._mixin().get_minimum_lookback() > 0
-
-
-# ---------------------------------------------------------------------------
-# HMMLSTMEntryMixin  (ML-model based — graceful fallback when models absent)
-# ---------------------------------------------------------------------------
-
-
-class TestHMMLSTMEntryMixin:
-    def test_default_params_keys(self):
-        params = HMMLSTMEntryMixin.get_default_params()
-        assert "prediction_threshold" in params
-        assert "regime_confidence_threshold" in params
-
-    def test_instantiates_without_models(self):
-        mixin = HMMLSTMEntryMixin()
-        assert mixin is not None
-        assert mixin.hmm_model is None
-        assert mixin.lstm_model is None
-
-    def test_no_entry_when_models_not_loaded(self):
-        mixin = HMMLSTMEntryMixin()
-        strategy = MockStrategy(indicators={}, data=MockData())
-        mixin.init_entry(strategy)
-        # is_initialized=False → are_indicators_ready()=False → should_enter()=False
-        assert mixin.should_enter() is False
-
-    def test_minimum_lookback_positive(self):
-        mixin = HMMLSTMEntryMixin()
-        assert mixin.get_minimum_lookback() >= 1

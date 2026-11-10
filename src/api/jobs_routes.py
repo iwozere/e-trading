@@ -44,14 +44,6 @@ import re
 
 PIPELINE_FOLDERS = {
     "p05": "p05_ai_selector",
-    "p06": "p06_emps2",
-    "p07": "p07_combined",
-    "p08": "p08_mtf",
-    "p09": "p09_arbitrage",
-    "p10": "p10_emps3",
-    "p12": "p12_order_flow",
-    "p13": "p13_bdsh",
-    "p14": "p14_ath",
     "p15": "p15_hidden_deps",
     "p17": "p17_penny_stocks",
     "p18": "p18_institutional_flow",
@@ -74,7 +66,7 @@ def _resolve_log_path(name_lower: str, run_date: date) -> Path | None:
 
     # Define candidate paths to search in order of specificity
     candidates = [
-        # 1. Date folder (e.g. results/p06_emps2/2026-07-05/pipeline.log)
+        # 1. Date folder (e.g. results/p05_ai_selector/2026-07-05/pipeline.log)
         results_dir / str(run_date) / "pipeline.log",
         # 2. Rotated date log (e.g. results/p15_hidden_deps/pipeline.log.2026-07-05)
         results_dir / f"pipeline.log.{run_date}",

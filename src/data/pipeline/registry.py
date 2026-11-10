@@ -34,7 +34,6 @@ from src.data.pipeline.base_plugin import PluginSpec
 from src.data.pipeline.specs.core_specs import SPECS as _CORE_SPECS
 from src.data.pipeline.specs.fmp_specs import SPECS as _FMP_SPECS
 from src.data.pipeline.specs.p05_specs import SPECS as _P05_SPECS
-from src.data.pipeline.specs.p10_specs import SPECS as _P10_SPECS
 from src.data.pipeline.specs.p15_specs import SPECS as _P15_SPECS
 from src.data.pipeline.specs.p17_specs import SPECS as _P17_SPECS
 from src.data.pipeline.specs.p18_specs import SPECS as _P18_SPECS
@@ -52,7 +51,6 @@ _GROUPS: List[List[PluginSpec]] = [
     _CORE_SPECS,
     _FMP_SPECS,
     _P05_SPECS,
-    _P10_SPECS,
     _P15_SPECS,
     _P17_SPECS,
     _P18_SPECS,
