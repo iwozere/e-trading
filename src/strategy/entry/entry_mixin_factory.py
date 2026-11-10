@@ -25,7 +25,6 @@ ENTRY_MIXIN_REGISTRY: Dict[str, Callable[..., BaseEntryMixin]] = {
     "EOMBreakoutEntryMixin": EOMBreakoutEntryMixin,
     "EOMMAcdBreakoutEntryMixin": EOMMAcdBreakoutEntryMixin,
     "EOMPullbackEntryMixin": EOMPullbackEntryMixin,
-    # "HMMLSTMEntryMixin": HMMLSTMEntryMixin,  # Excluded due to model architectural mismatches/loading errors
 }
 
 

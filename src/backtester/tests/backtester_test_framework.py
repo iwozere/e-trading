@@ -125,8 +125,6 @@ class BacktesterTestFramework:
         strategy_map = {
             "CustomStrategy": CustomStrategy,
             # Add more strategies as needed
-            # 'HMMLSTMStrategy': HMMLSTMStrategy,
-            # 'CNNXGBoostStrategy': CNNXGBoostStrategy,
         }
 
         if strategy_type not in strategy_map:

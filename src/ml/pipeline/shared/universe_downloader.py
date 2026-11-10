@@ -2,7 +2,7 @@
 NASDAQ Universe Downloader
 
 Downloads complete US stock universe from NASDAQ Trader (FTP, with HTTPS fallback).
-Stores results in results/emps2/YYYY-MM-DD/ for date-based organization.
+Caches results in results/shared/YYYY-MM-DD/ (or a caller-supplied results_dir).
 """
 
 import ftplib
@@ -173,9 +173,6 @@ class NasdaqUniverseDownloader:
         except Exception:
             _logger.exception("Error downloading from NASDAQ Trader:")
             _logger.error("Unable to download from NASDAQ Trader. Please check network/firewall settings.")
-            _logger.info(
-                "You can try manual download using: python src/ml/pipeline/p06_emps2/download_nasdaq_manual.py"
-            )
             return []
 
     def _fetch_symbol_files(self) -> Dict[str, str]:

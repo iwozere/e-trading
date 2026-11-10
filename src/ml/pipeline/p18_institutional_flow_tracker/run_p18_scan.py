@@ -2,7 +2,7 @@
 P18 Institutional Flow Tracker — Scheduler Entry Point
 
 Called daily by the scheduler as a DATA_PROCESSING job.
-Follows the same contract as p10_emps3/run_emps3_scan.py:
+Follows the standard scheduler script contract:
 - accepts --user-id injected by the scheduler
 - prints __SCHEDULER_RESULT__:<json> to stdout
 - exits 0 on success, 1 on failure

@@ -6,6 +6,7 @@ Provides endpoints for managing schedules and runs.
 """
 
 import json
+import re
 from datetime import date
 from pathlib import Path
 from typing import List
@@ -16,7 +17,6 @@ from fastapi.encoders import jsonable_encoder
 from src.data.db.services.database_service import DatabaseService, get_database_service
 
 from src.api.auth import get_current_user, require_trader_or_admin
-from src.api.services.webui_app_service import webui_app_service
 from src.common.config.screener_config_loader import get_screener_config
 from src.data.db.models.model_jobs import (
     JobType,
@@ -39,25 +39,15 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 # Create router
 router = APIRouter(prefix="/api", tags=["jobs"])
 
-
-import re
-
 PIPELINE_FOLDERS = {
     "p05": "p05_ai_selector",
-    "p06": "p06_emps2",
-    "p07": "p07_combined",
-    "p08": "p08_mtf",
-    "p09": "p09_arbitrage",
-    "p10": "p10_emps3",
-    "p12": "p12_order_flow",
-    "p13": "p13_bdsh",
-    "p14": "p14_ath",
     "p15": "p15_hidden_deps",
     "p17": "p17_penny_stocks",
     "p18": "p18_institutional_flow",
     "p19": "p19_penny_intraday",
     "p20": "p20_kestrel",
 }
+
 
 def _resolve_log_path(name_lower: str, run_date: date) -> Path | None:
     """Map a schedule name / job_id to its pipeline.log file path."""
@@ -74,7 +64,7 @@ def _resolve_log_path(name_lower: str, run_date: date) -> Path | None:
 
     # Define candidate paths to search in order of specificity
     candidates = [
-        # 1. Date folder (e.g. results/p06_emps2/2026-07-05/pipeline.log)
+        # 1. Date folder (e.g. results/p05_ai_selector/2026-07-05/pipeline.log)
         results_dir / str(run_date) / "pipeline.log",
         # 2. Rotated date log (e.g. results/p15_hidden_deps/pipeline.log.2026-07-05)
         results_dir / f"pipeline.log.{run_date}",

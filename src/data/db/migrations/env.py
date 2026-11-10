@@ -16,7 +16,6 @@ import src.data.db.models.model_jobs  # noqa: F401,E402
 import src.data.db.models.model_kestrel  # noqa: F401,E402
 import src.data.db.models.model_notification  # noqa: F401,E402
 import src.data.db.models.model_p22_biotech_ma  # noqa: F401,E402
-import src.data.db.models.model_short_squeeze  # noqa: F401,E402
 import src.data.db.models.model_signal_ledger  # noqa: F401,E402
 import src.data.db.models.model_system_health  # noqa: F401,E402
 import src.data.db.models.model_telegram  # noqa: F401,E402

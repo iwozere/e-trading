@@ -95,7 +95,6 @@ def tmp_schema(engine):
         # we import lazily here so tests can be discovered without immediately requiring DB
         import src.data.db.models.model_jobs as _mj  # noqa: F401,E402
         import src.data.db.models.model_notification as _mn  # noqa: F401,E402
-        import src.data.db.models.model_short_squeeze as _mss  # noqa: F401,E402
         import src.data.db.models.model_system_health as _ms  # noqa: F401,E402
         import src.data.db.models.model_telegram as _mtg  # noqa: F401,E402
         import src.data.db.models.model_trading as _mt  # noqa: F401,E402

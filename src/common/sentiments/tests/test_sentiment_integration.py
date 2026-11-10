@@ -117,7 +117,7 @@ class TestHackerNewsFanOutFlatAcrossBatchSize:
         from src.common.sentiments.entity.resolver import EntityDef, EntityResolver
 
         resolver = EntityResolver({"NVDA": EntityDef(ticker="NVDA", names=["nvidia"])})
-        adapter = AsyncHackerNewsAdapter(rate_limit_rps=1000.0, db_cache_enabled=False)
+        adapter = AsyncHackerNewsAdapter(rate_limit_rps=1000.0, corpus_cache_path=None)
         adapter._resolver = resolver
 
         fetch_json_calls = {"count": 0}

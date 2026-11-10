@@ -40,7 +40,6 @@ from src.data.db.repos.repo_kestrel import KestrelRepo
 from src.data.db.repos.repo_p22_biotech_ma import P22Repo
 from src.data.db.repos.repo_signal_ledger import SignalLedgerRepo
 from src.data.db.repos.repo_trade_ledger import TradeLedgerRepo
-from src.data.db.repos.repo_short_squeeze import ShortSqueezeRepo
 from src.data.db.repos.repo_system_health import SystemHealthRepository
 from src.data.db.repos.repo_telegram import (
     BroadcastRepo as TelegramBroadcastRepo,
@@ -116,7 +115,6 @@ def mock_database_service(db_session: Session) -> Mock:
         trades=TradingTradesRepo(db_session),
         positions=TradingPositionsRepo(db_session),
         metrics=TradingMetricsRepo(db_session),
-        short_squeeze=ShortSqueezeRepo(db_session),
         kestrel=KestrelRepo(db_session),
         p22=P22Repo(db_session),
         signal_ledger=SignalLedgerRepo(db_session),
@@ -156,7 +154,6 @@ def repos_bundle(db_session: Session) -> ReposBundle:
         trades=TradingTradesRepo(db_session),
         positions=TradingPositionsRepo(db_session),
         metrics=TradingMetricsRepo(db_session),
-        short_squeeze=ShortSqueezeRepo(db_session),
         kestrel=KestrelRepo(db_session),
         p22=P22Repo(db_session),
         signal_ledger=SignalLedgerRepo(db_session),
@@ -180,12 +177,6 @@ def users_repo(db_session: Session) -> UsersRepo:
 def notification_repo(db_session: Session) -> NotificationRepository:
     """Provide a NotificationRepository for testing."""
     return NotificationRepository(db_session)
-
-
-@pytest.fixture
-def short_squeeze_repo(db_session: Session) -> ShortSqueezeRepo:
-    """Provide a ShortSqueezeRepo for testing."""
-    return ShortSqueezeRepo(db_session)
 
 
 @pytest.fixture

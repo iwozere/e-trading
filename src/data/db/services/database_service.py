@@ -21,7 +21,6 @@ from src.data.db.repos.repo_jobs import JobsRepository
 from src.data.db.repos.repo_kestrel import KestrelRepo
 from src.data.db.repos.repo_notification import NotificationRepository
 from src.data.db.repos.repo_p22_biotech_ma import P22Repo
-from src.data.db.repos.repo_short_squeeze import ShortSqueezeRepo
 from src.data.db.repos.repo_signal_ledger import SignalLedgerRepo
 from src.data.db.repos.repo_system_health import SystemHealthRepository
 from src.data.db.repos.repo_telegram import (
@@ -106,9 +105,6 @@ class ReposBundle:
     positions: TradingPositionsRepo
     metrics: TradingMetricsRepo
 
-    # Short Squeeze Pipeline
-    short_squeeze: ShortSqueezeRepo
-
     # P20 Kestrel Pipeline
     kestrel: KestrelRepo
 
@@ -181,8 +177,6 @@ class DatabaseService:
                 trades=TradingTradesRepo(s),
                 positions=TradingPositionsRepo(s),
                 metrics=TradingMetricsRepo(s),
-                # Short Squeeze Pipeline
-                short_squeeze=ShortSqueezeRepo(s),
                 # P20 Kestrel Pipeline
                 kestrel=KestrelRepo(s),
                 # P22 Biotech M&A Pipeline

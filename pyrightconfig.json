@@ -13,11 +13,6 @@
     "**/.venv",
     "**/node_modules",
     "src/ml/future",
-    "src/ml/pipeline/p00_hmm_3lstm",
-    "src/ml/pipeline/p01_hmm_lstm",
-    "src/ml/pipeline/p02_cnn_lstm_xgboost",
-    "src/ml/pipeline/p03_cnn_xgboost",
-    "src/ml/pipeline/p09_arbitrage",
     "src/data/examples",
     "src/notification/docs"
   ],

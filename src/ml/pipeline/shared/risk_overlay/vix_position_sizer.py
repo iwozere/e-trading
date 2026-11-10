@@ -2,8 +2,8 @@
 VIX-based position sizer — shared risk overlay.
 
 Computes target portfolio exposure (0.0–1.0) from a VIX time-series using
-rolling Z-score tiers.  Extracted from P13 (p13_bdsh) so any pipeline can
-apply the same VIX risk overlay without depending on P13 internals.
+rolling Z-score tiers.  Originally extracted from the (since removed) P13
+pipeline so any pipeline can apply the same VIX risk overlay.
 
 Typical usage::
 
