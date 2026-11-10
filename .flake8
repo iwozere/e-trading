@@ -4,6 +4,9 @@ max-line-length = 180
 # E402: module imports follow the sys.path bootstrap on purpose (matches ruff's ignore in pyproject.toml)
 # E203: whitespace before ":" in slices is how ruff format writes them
 extend-ignore = E402,E203
+# F811: fixtures imported from repos/conftest.py are re-used as test-fixture parameters (pytest pattern)
+per-file-ignores =
+    src/data/db/tests/services/conftest.py:F811
 
 # Custom rule: Disallow direct 'import logging' except in src/notification/logger.py
 # Use flake8-import-restrictions or flake8-builtins for enforcement if available.

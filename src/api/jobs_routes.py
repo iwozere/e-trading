@@ -6,6 +6,7 @@ Provides endpoints for managing schedules and runs.
 """
 
 import json
+import re
 from datetime import date
 from pathlib import Path
 from typing import List
@@ -16,7 +17,6 @@ from fastapi.encoders import jsonable_encoder
 from src.data.db.services.database_service import DatabaseService, get_database_service
 
 from src.api.auth import get_current_user, require_trader_or_admin
-from src.api.services.webui_app_service import webui_app_service
 from src.common.config.screener_config_loader import get_screener_config
 from src.data.db.models.model_jobs import (
     JobType,
@@ -39,9 +39,6 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 # Create router
 router = APIRouter(prefix="/api", tags=["jobs"])
 
-
-import re
-
 PIPELINE_FOLDERS = {
     "p05": "p05_ai_selector",
     "p15": "p15_hidden_deps",
@@ -50,6 +47,7 @@ PIPELINE_FOLDERS = {
     "p19": "p19_penny_intraday",
     "p20": "p20_kestrel",
 }
+
 
 def _resolve_log_path(name_lower: str, run_date: date) -> Path | None:
     """Map a schedule name / job_id to its pipeline.log file path."""

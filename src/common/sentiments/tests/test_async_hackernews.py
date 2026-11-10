@@ -271,7 +271,6 @@ class TestAsyncHackerNewsAdapter:
             assert msg["user"]["username"] == ""  # no raw HN handle retained
             assert msg["provider"] == "hackernews"
 
-
     @pytest.mark.asyncio
     async def test_observability_stats_empty_before_corpus_built(self, adapter: AsyncHackerNewsAdapter) -> None:
         """get_observability_stats() backs sentiment.hn.corpus_size/entity_match_rate (spec §2.10)."""
