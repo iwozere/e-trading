@@ -26,6 +26,5 @@ from src.data.db.tests.services.conftest import (  # noqa: F401
     mock_database_service,
     notification_repo,
     repos_bundle,
-    short_squeeze_repo,
     users_repo,
 )

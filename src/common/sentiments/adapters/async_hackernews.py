@@ -13,15 +13,18 @@ Critical design constraint (spec §2.4): **shared-corpus fetch, not per-ticker f
 per batch run this adapter builds a single corpus (newstories + topstories, walked down bounded
 by max_depth/max_items_per_thread) and entity-matches *every* ticker against that one corpus in
 process. Cost is O(corpus size), independent of how many tickers are in the batch. The corpus is
-also cached in Postgres (`ss_hn_corpus`) so a scan re-run within `hn_corpus_ttl_seconds` reuses it
-wholesale instead of re-fetching from the Firebase API.
+also cached in a JSON file (`DATA_CACHE_DIR/sentiment/hn_corpus.json`) so a scan re-run within
+`hn_corpus_ttl_seconds` reuses it wholesale instead of re-fetching from the Firebase API.
 """
 
 from __future__ import annotations
 
 import asyncio
 import html
+import json
+import os
 import re
+import tempfile
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -40,6 +43,16 @@ from src.common.sentiments.processing.heuristic_analyzer import HeuristicSentime
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
+
+def _default_corpus_cache_path() -> Path:
+    """Return ``DATA_CACHE_DIR/sentiment/hn_corpus.json`` (temp dir when no local config exists)."""
+    try:
+        from config.donotshare.donotshare import DATA_CACHE_DIR
+    except ImportError:
+        DATA_CACHE_DIR = str(Path(tempfile.gettempdir()) / "e-trading-cache")
+    return Path(DATA_CACHE_DIR) / "sentiment" / "hn_corpus.json"
+
 
 BASE_URL = "https://hacker-news.firebaseio.com/v0/"
 
@@ -112,7 +125,7 @@ class AsyncHackerNewsAdapter(BaseSentimentAdapter):
         strip_code_blocks: bool = True,
         hn_corpus_ttl_seconds: int = 1800,
         entity_map_path: str | Path | None = None,
-        db_cache_enabled: bool = True,
+        corpus_cache_path: str | Path | None = "default",
     ):
         # `rate_limit_delay` is accepted directly for compatibility with adapter_manager's
         # generic batching config (which only knows about the shared "concurrency" /
@@ -131,7 +144,10 @@ class AsyncHackerNewsAdapter(BaseSentimentAdapter):
         self.max_story_candidates = max_story_candidates
         self.strip_code_blocks = strip_code_blocks
         self.hn_corpus_ttl_seconds = hn_corpus_ttl_seconds
-        self.db_cache_enabled = db_cache_enabled
+        # "default" -> DATA_CACHE_DIR/sentiment/hn_corpus.json; None disables the cache.
+        self.corpus_cache_path: Path | None = (
+            _default_corpus_cache_path() if corpus_cache_path == "default" else (Path(corpus_cache_path) if corpus_cache_path else None)
+        )
 
         # Reads config/sentiments.json's lexicons.tech_discourse bucket -- distinct from the
         # retail lexicon used by StockTwits/Bluesky/etc; sharing one lexicon across both is the
@@ -346,61 +362,44 @@ class AsyncHackerNewsAdapter(BaseSentimentAdapter):
         whole-corpus cache hit, not a per-item one. Returns None on any cache miss/failure so the
         caller falls back to a live fetch.
         """
-        if not self.db_cache_enabled:
+        path = self.corpus_cache_path
+        if path is None or not path.exists():
             return None
         try:
-            from src.data.db.services.short_squeeze_service import ShortSqueezeService
-
-            service = ShortSqueezeService()
-            fetched_after = datetime.now(UTC) - timedelta(seconds=self.hn_corpus_ttl_seconds)
-            rows = await self._run_db(service.get_hn_corpus_items_since, cutoff, fetched_after)
-        except Exception as e:
-            _logger.debug("Hacker News corpus cache lookup failed, will fetch live: %s", e)
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            fetched_at = datetime.fromisoformat(payload["fetched_at"])
+            if datetime.now(UTC) - fetched_at > timedelta(seconds=self.hn_corpus_ttl_seconds):
+                return None
+            items = [{**item, "created_utc": datetime.fromisoformat(item["created_utc"])} for item in payload["items"]]
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            _logger.debug("Hacker News corpus cache unreadable, will fetch live: %s", e)
             return None
-
-        if not rows:
-            return None
-
-        return [
-            {
-                "item_id": row["item_id"],
-                "item_type": row["item_type"],
-                "parent_id": row["parent_id"],
-                "story_id": row["story_id"],
-                "author_hash": row["author_hash"],
-                "created_utc": row["created_utc"],
-                "text_clean": row["text_clean"] or "",
-                "score": row["score"],
-            }
-            for row in rows
-        ]
+        return [item for item in items if item["created_utc"] >= cutoff] or None
 
     async def _persist_corpus(self, corpus: List[Dict[str, Any]]) -> None:
-        if not self.db_cache_enabled or not corpus:
+        path = self.corpus_cache_path
+        if path is None or not corpus:
             return
-        now = datetime.now(UTC)
-        rows = [
+        items = [
             {
                 "item_id": item["item_id"],
                 "item_type": item["item_type"],
                 "parent_id": item.get("parent_id"),
                 "story_id": item.get("story_id"),
                 "author_hash": item.get("author_hash"),
-                "created_utc": item["created_utc"],
+                "created_utc": item["created_utc"].isoformat(),
                 "text_clean": item.get("text_clean") or "",
                 "score": item.get("score"),
-                "fetched_at": now,
             }
             for item in corpus
         ]
+        payload = {"fetched_at": datetime.now(UTC).isoformat(), "items": items}
         try:
-            from src.data.db.services.short_squeeze_service import ShortSqueezeService
-
-            service = ShortSqueezeService()
-            chunk_size = 500
-            for start in range(0, len(rows), chunk_size):
-                await self._run_db(service.upsert_hn_corpus_items, rows[start : start + chunk_size])
-        except Exception as e:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(payload), encoding="utf-8")
+            os.replace(tmp, path)  # atomic: a concurrent reader never sees a half-written file
+        except OSError as e:
             _logger.warning("Failed to persist Hacker News corpus cache (continuing without it): %s", e)
 
     # ------------------------------------------------------------------

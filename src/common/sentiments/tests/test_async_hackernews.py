@@ -81,7 +81,7 @@ class TestAsyncHackerNewsAdapter:
         instance = AsyncHackerNewsAdapter(
             concurrency=5,
             rate_limit_rps=1000.0,  # effectively no throttling in tests
-            db_cache_enabled=False,  # no DB dependency in unit tests
+            corpus_cache_path=None,  # no cache file in unit tests
         )
         instance._resolver = resolver
         yield instance
@@ -308,7 +308,7 @@ class TestPerformanceInvariant:
         resolver = EntityResolver(
             {"NVDA": EntityDef(ticker="NVDA", names=["nvidia"]), "AMD": EntityDef(ticker="AMD", names=["amd"])}
         )
-        adapter = AsyncHackerNewsAdapter(rate_limit_rps=1000.0, db_cache_enabled=False)
+        adapter = AsyncHackerNewsAdapter(rate_limit_rps=1000.0, corpus_cache_path=None)
         adapter._resolver = resolver
 
         ensure_corpus_mock = AsyncMock(wraps=adapter._ensure_corpus)
@@ -321,4 +321,54 @@ class TestPerformanceInvariant:
 
         assert ensure_corpus_mock.await_count == 3  # called each time, but ...
         # ... and each call is a cheap no-op once _corpus is set (no network fan-out re-triggered)
+        await adapter.close()
+
+
+class TestHackerNewsCorpusFileCache:
+    """JSON file cache that lets a re-run within the TTL reuse the corpus instead of re-fetching."""
+
+    @staticmethod
+    def _item(item_id: int, hours_ago: float) -> dict:
+        return {
+            "item_id": item_id,
+            "item_type": "story",
+            "parent_id": None,
+            "story_id": item_id,
+            "author_hash": "abc",
+            "created_utc": datetime.now(UTC) - timedelta(hours=hours_ago),
+            "text_clean": f"story {item_id}",
+            "score": 5,
+        }
+
+    @pytest.mark.asyncio
+    async def test_cache_round_trip_filters_by_cutoff(self, tmp_path) -> None:
+        adapter = AsyncHackerNewsAdapter(corpus_cache_path=tmp_path / "hn.json")
+        await adapter._persist_corpus([self._item(1, 1), self._item(2, 72)])
+        cached = await adapter._load_cached_corpus(datetime.now(UTC) - timedelta(hours=48))
+        assert cached is not None
+        assert [item["item_id"] for item in cached] == [1]
+        assert isinstance(cached[0]["created_utc"], datetime)
+        await adapter.close()
+
+    @pytest.mark.asyncio
+    async def test_cache_expired_returns_none(self, tmp_path) -> None:
+        adapter = AsyncHackerNewsAdapter(corpus_cache_path=tmp_path / "hn.json", hn_corpus_ttl_seconds=0)
+        await adapter._persist_corpus([self._item(1, 1)])
+        assert await adapter._load_cached_corpus(datetime.now(UTC) - timedelta(hours=48)) is None
+        await adapter.close()
+
+    @pytest.mark.asyncio
+    async def test_corrupt_cache_returns_none(self, tmp_path) -> None:
+        path = tmp_path / "hn.json"
+        path.write_text("{not json", encoding="utf-8")
+        adapter = AsyncHackerNewsAdapter(corpus_cache_path=path)
+        assert await adapter._load_cached_corpus(datetime.now(UTC) - timedelta(hours=48)) is None
+        await adapter.close()
+
+    @pytest.mark.asyncio
+    async def test_disabled_cache_never_writes(self, tmp_path) -> None:
+        adapter = AsyncHackerNewsAdapter(corpus_cache_path=None)
+        await adapter._persist_corpus([self._item(1, 1)])
+        assert await adapter._load_cached_corpus(datetime.now(UTC) - timedelta(hours=48)) is None
+        assert list(tmp_path.iterdir()) == []
         await adapter.close()

@@ -41,10 +41,9 @@ from src.data.db.models.model_p22_biotech_ma import (
 )
 
 # `ingest/price_archive.py`'s pure adjustment math is imported lazily, inside
-# `get_adjusted_close` below, rather than at module scope — mirroring the
-# existing precedent for src/data/db -> src/ml/pipeline references
-# (model_short_squeeze.py), which keeps the DB layer importable on its own
-# and avoids a module-load-order dependency on a specific pipeline package.
+# `get_adjusted_close` below, rather than at module scope, which keeps the
+# DB layer importable on its own and avoids a module-load-order dependency
+# on a specific pipeline package.
 
 
 def _trial_public_by(as_of: date) -> ColumnElement[bool]:
