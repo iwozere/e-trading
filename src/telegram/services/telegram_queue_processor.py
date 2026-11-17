@@ -472,6 +472,11 @@ class TelegramQueueProcessor:
                 # Raw bytes (direct usage)
                 actual_data = attachment_data
                 self._logger.debug("Using raw bytes attachment: %s (size: %d bytes)", filename, len(actual_data))
+            elif isinstance(attachment_data, (str, Path)):
+                # Plain file path: {"name.png": "/path/name.png"} or the flattened {"files": [...]} form
+                with open(attachment_data, "rb") as f:
+                    actual_data = f.read()
+                self._logger.debug("Read file attachment: %s from %s", filename, attachment_data)
 
             if actual_data:
                 return BufferedInputFile(actual_data, filename=filename)

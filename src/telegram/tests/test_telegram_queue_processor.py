@@ -181,3 +181,19 @@ def test_long_caption_sent_as_separate_text(processor: tqp.TelegramQueueProcesso
 
     assert bot.send_document.await_args.kwargs["caption"] is None
     assert bot.send_message.await_args.kwargs["text"] == text
+
+
+@pytest.mark.parametrize("as_files_list", [False, True])
+def test_plain_path_attachment_is_sent(processor: tqp.TelegramQueueProcessor, bot: Mock, tmp_path: Path, as_files_list: bool) -> None:
+    """A bare path string (P24 charts) or the {"files": [...]} form is read from disk and sent."""
+    bot.send_document = AsyncMock()
+    chart = tmp_path / "NPKI_daily.png"
+    chart.write_bytes(b"png-bytes")
+    attachments: Dict[str, Any] = {"files": [str(chart)]} if as_files_list else {chart.name: str(chart)}
+
+    asyncio.run(processor._send_with_attachments(123, "NPKI daily", attachments))
+
+    document = bot.send_document.await_args.kwargs["document"]
+    assert document.filename == "NPKI_daily.png"
+    assert document.data == b"png-bytes"
+    bot.send_message.assert_not_called()
