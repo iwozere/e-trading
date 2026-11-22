@@ -75,7 +75,7 @@ def _handler(warning: bool = False):
 
 
 def _client(handler) -> EodhdClient:
-    return EodhdClient("k", client=httpx.Client(transport=httpx.MockTransport(handler)))
+    return EodhdClient("k", client=httpx.Client(transport=httpx.MockTransport(handler)), sleep=lambda _: None)
 
 
 def test_name_similarity_ignores_legal_forms():

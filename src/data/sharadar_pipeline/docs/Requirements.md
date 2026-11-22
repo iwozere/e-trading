@@ -40,6 +40,7 @@ it lacks stocks delisted before 2021, and keep only results that the licence all
 
 - `src.data.fmp_pipeline` — vintage securities table, `adjust()`, reader interface
 - `src.notification.logger` — logging
+- `src.data.eodhd_pipeline` — `EodhdClient` and `name_similarity` for `eodhd-check`
 - `src.ml.pipeline.p24_falling_knife`, `src.ml.research.event_bench` — research helpers used by the screens
 
 ## External Services

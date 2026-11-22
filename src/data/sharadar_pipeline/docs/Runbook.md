@@ -29,6 +29,9 @@ Goal: find out whether EODHD's delisted price history is deep enough to be the k
 
 The detail file `reports/eodhd_check.csv` contains Sharadar ticker rows and stays in the Sharadar data root.
 
+If the check passes, the full download is `src/data/eodhd_pipeline` ([its Runbook](../../eodhd_pipeline/docs/Runbook.md)),
+in the same month.
+
 ## Before buying Sharadar
 
 1. The deletion rule is accepted ([Findings](Findings.md), section 3).

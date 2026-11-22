@@ -13,21 +13,22 @@ per EODHD candidate (at most ``MAX_CANDIDATES``).
 
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any, Callable, Optional
 
-import httpx
 import numpy as np
 import pandas as pd
 
+from src.data.eodhd_pipeline.client import EodhdClient, EodhdError, EodHistory
+from src.data.eodhd_pipeline.mapping import MIN_NAME_SIMILARITY, name_similarity
 from src.data.sharadar_pipeline.convert import securities_frame
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
-EODHD_BASE = "https://eodhd.com/api"
+__all__ = ["EodhdClient", "EodhdError", "EodHistory", "name_similarity", "delisted_universe", "sample_universe", "find_candidates",
+           "grade", "run_check", "summarize"]
+
 HISTORY_START = date(1997, 12, 1)
 #: Sharadar prices start here; a stock listed earlier can only be compared from this date on.
 YARDSTICK_START = date(1997, 12, 31)
@@ -38,88 +39,6 @@ MAX_CANDIDATES = 2
 DATE_TOLERANCE_DAYS = 10
 #: Share of the expected sessions that must have a bar for a history to count as full.
 MIN_BAR_SHARE = 0.9
-#: Company names agree when their token overlap is at least this.
-MIN_NAME_SIMILARITY = 0.5
-
-_NAME_NOISE = {"inc", "corp", "corporation", "co", "company", "ltd", "limited", "plc", "holdings", "holding", "group", "the", "sa",
-               "nv", "ag", "lp", "llc", "trust", "class", "a", "b", "common", "stock", "new", "de", "of", "and"}
-_TOKEN_RE = re.compile(r"[a-z0-9]+")
-
-
-class EodhdError(RuntimeError):
-    """EODHD answered with an error."""
-
-
-@dataclass(frozen=True)
-class EodHistory:
-    """Daily bars of one EODHD symbol."""
-
-    code: str
-    bars: pd.DataFrame
-    plan_limited: bool
-
-
-class EodhdClient:
-    """Minimal EODHD client: the delisted symbol list and end-of-day bars."""
-
-    def __init__(self, api_key: str, client: Optional[httpx.Client] = None, sleep: Callable[[float], None] = lambda _: None) -> None:
-        """
-        Args:
-            api_key: EODHD API token.
-            client: Existing ``httpx.Client`` (tests pass a mock transport).
-            sleep: Wait function used between retries.
-        """
-        self._key = api_key
-        self._client = client or httpx.Client(timeout=httpx.Timeout(120.0, connect=30.0))
-        self._sleep = sleep
-        self.calls = 0
-
-    def close(self) -> None:
-        """Close the connection pool."""
-        self._client.close()
-
-    def _get(self, path: str, params: dict[str, Any]) -> Any:
-        for attempt in range(4):
-            self.calls += 1
-            response = self._client.get(f"{EODHD_BASE}{path}", params={"api_token": self._key, "fmt": "json", **params})
-            if response.status_code == 404:
-                return None
-            if response.status_code in (429, 500, 502, 503, 504) and attempt < 3:
-                self._sleep(2.0 ** attempt)
-                continue
-            if response.status_code >= 400:
-                raise EodhdError(f"{path}: HTTP {response.status_code} {response.text[:200]}")
-            return response.json()
-        raise EodhdError(f"{path}: retries exhausted")
-
-    def delisted_symbols(self, exchange: str = "US") -> pd.DataFrame:
-        """Return EODHD's delisted symbols of an exchange (``Code``, ``Name``, ``Exchange``, ``Type``, …)."""
-        return pd.DataFrame(self._get(f"/exchange-symbol-list/{exchange}", {"delisted": 1}) or [])
-
-    def eod(self, code: str, start: date, end: date, exchange: str = "US") -> EodHistory:
-        """
-        Return a symbol's daily bars between ``start`` and ``end``.
-
-        Returns:
-            Bars with ``date``, ``open``, ``high``, ``low``, ``close`` (as traded), ``adjusted_close``, ``volume``;
-            empty when EODHD has none. ``plan_limited`` is True when EODHD says the plan cut the history.
-        """
-        payload = self._get(f"/eod/{code}.{exchange}", {"from": start.isoformat(), "to": end.isoformat()}) or []
-        limited = any(isinstance(row, dict) and "warning" in row for row in payload)
-        rows = [row for row in payload if isinstance(row, dict) and "date" in row]
-        bars = pd.DataFrame(rows)
-        if len(bars):
-            bars["date"] = pd.to_datetime(bars["date"]).dt.date
-        return EodHistory(code, bars, limited)
-
-
-def name_similarity(a: Optional[str], b: Optional[str]) -> float:
-    """Return the token overlap (Jaccard) of two company names after dropping legal-form words; 0 if either is empty."""
-    left = {t for t in _TOKEN_RE.findall((a or "").lower()) if t not in _NAME_NOISE}
-    right = {t for t in _TOKEN_RE.findall((b or "").lower()) if t not in _NAME_NOISE}
-    if not left or not right:
-        return 0.0
-    return len(left & right) / len(left | right)
 
 
 def delisted_universe(tickers: pd.DataFrame) -> pd.DataFrame:

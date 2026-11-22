@@ -19,8 +19,9 @@
 - [ ] Buy one EODHD EOD month ($19.99), then run `eodhd-check` ([Runbook](Runbook.md))
 - [ ] Confirm the research queue below and its order
 
-### 🚀 PLANNED — if the EODHD check passes
-- [ ] EODHD delisted-price downloader and a kept store (prices, splits, dividends), cross-checked against the FMP vintage
+### ✅ BUILT — for when the EODHD check passes
+- [x] EODHD delisted-price downloader and kept store: `src/data/eodhd_pipeline` (2026-11-22), with its own
+      [Runbook](../../eodhd_pipeline/docs/Runbook.md); `eodhd-check` now uses its client
 
 ### 🚀 PLANNED — before purchase
 - [ ] Research scripts for the queue below, written against the store interface and run once on the FMP vintage
