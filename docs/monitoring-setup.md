@@ -264,11 +264,18 @@ source = '''
   . = { "source_type": .source_type, "source_name": .source_name, "message": .message }
 '''
 
-# Keep only lines that look like errors
+# Keep only lines that look like errors. INFO/DEBUG Python-logging lines are dropped even
+# when they contain the word, e.g. "... INFO ...: 37 request(s) stored, 0 error(s)".
+# (/internal/log-alert applies the same guard as a backstop — see _is_noise in src/api/internal_routes.py.)
 [transforms.errors_only]
 type = "filter"
 inputs = ["normalize"]
-condition = 'match(string!(.message), r"(?i)(error|exception|critical|traceback|fatal)")'
+condition = '''
+  msg = string!(.message)
+  match(msg, r"(?i)(error|exception|critical|traceback|fatal)") &&
+    !match(msg, r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}[,.\d]*\s+(DEBUG|INFO)\b") &&
+    !match(msg, r"(?i)\b0 error\(s\)")
+'''
 
 # Build a stable fingerprint by stripping variable parts (numbers, UUIDs,
 # timestamps) so "Error on item 42" and "Error on item 99" count as one error

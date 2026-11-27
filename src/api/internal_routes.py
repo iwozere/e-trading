@@ -25,6 +25,34 @@ _TOKEN_HEADER = "X-Internal-Token"
 # "[Monitoring/session-1.scope] [systemd/session-1.scope] Read error ...".
 _SOURCE_PREFIX_RE = re.compile(r"^\[[^\]]+\]\s*")
 
+# Same keywords Vector's `errors_only` filter matches on (docs/monitoring-setup.md).
+_ERROR_KEYWORD_RE = re.compile(r"(?i)(error|exception|critical|traceback|fatal)")
+
+# Python-logging line at a non-alerting level, e.g. "2026-11-27 01:09:23,982 INFO name: ...".
+_LOW_LEVEL_LINE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}[,.\d]*\s+(DEBUG|INFO)\b")
+
+# Zero-count summaries such as "0 error(s)", "0 errors", "0 exceptions".
+_ZERO_COUNT_RE = re.compile(r"(?i)\b0\s+(errors?|error\(s\)|exceptions?|exception\(s\)|fatals?)")
+
+
+def _is_noise(text: str) -> bool:
+    """
+    Tell whether a forwarded log line only looked like an error to Vector's keyword filter.
+
+    Vector keeps any line containing "error" etc., so INFO progress lines such as
+    "... 37 request(s), 364 phrase(s) stored, 0 error(s)" were raised as alerts.
+
+    Args:
+        text: Alert text as sent by Vector (may carry a "[type/source] " prefix).
+
+    Returns:
+        True if the line should be dropped instead of alerted on.
+    """
+    line = _SOURCE_PREFIX_RE.sub("", text.splitlines()[0] if text else "", count=1)
+    if _LOW_LEVEL_LINE_RE.match(line):
+        return True
+    return not _ERROR_KEYWORD_RE.search(_ZERO_COUNT_RE.sub("", line))
+
 
 def _check_internal_access(request: Request) -> None:
     """Verify request is from localhost and carries the correct shared secret."""
@@ -64,6 +92,10 @@ async def receive_log_alert(request: Request) -> dict:
         alert = LogAlertRequest(**payload)
     except Exception as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+
+    if _is_noise(alert.text):
+        _logger.debug("Dropped non-error log alert: source=%s", alert.source)
+        return {"ok": True, "dropped": "noise"}
 
     # Only admins with a linked Telegram identity can receive this — channels is
     # hardcoded to ["telegram"] below, and a role='admin' row with no Telegram

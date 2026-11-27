@@ -97,6 +97,57 @@ async def test_log_alert_subject_does_not_duplicate_source_prefix():
     assert queued["content"]["message"] == "[systemd/session-1.scope] Read error from remote host 1.2.3.4"
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "[systemd/nightly.service] 2026-11-27 01:09:23,982 INFO ideas_gathering.suggest: suggest youtube en-US 'app for': "
+        "37 request(s), 364 phrase(s) stored, 0 error(s)",
+        "[systemd/foo.service] 2026-11-27 01:09:23,982 DEBUG foo: retrying after error",
+        "[systemd/foo.service] batch done, 0 errors, 0 exceptions",
+    ],
+)
+@pytest.mark.asyncio
+async def test_log_alert_drops_non_error_lines(text: str):
+    """Regression: INFO/DEBUG lines and "0 error(s)" summaries must not raise alerts (see monitoring.txt)."""
+    request = _make_request({"text": text, "source": "nightly.service"})
+
+    with (
+        patch("src.api.internal_routes.settings.internal_api_token", ""),
+        patch("src.api.internal_routes.telegram_service") as mock_telegram_service,
+        patch("src.api.internal_routes.NotificationService") as mock_notification_service,
+    ):
+        result = await receive_log_alert(request)
+
+    assert result == {"ok": True, "dropped": "noise"}
+    mock_telegram_service.get_admin_user_ids.assert_not_called()
+    mock_notification_service.return_value.create_message.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "[systemd/foo.service] 2026-11-27 01:09:23,982 ERROR foo: boom",
+        "[systemd/foo.service] 2026-11-27 01:09:23,982 WARNING foo: 3 error(s), 0 exceptions",
+        "[systemd/foo.service] Traceback (most recent call last):",
+    ],
+)
+@pytest.mark.asyncio
+async def test_log_alert_keeps_real_errors(text: str):
+    """Real error lines still go through the noise guard."""
+    request = _make_request({"text": text, "source": "foo.service"})
+
+    with (
+        patch("src.api.internal_routes.settings.internal_api_token", ""),
+        patch("src.api.internal_routes.telegram_service") as mock_telegram_service,
+        patch("src.api.internal_routes.NotificationService") as mock_notification_service,
+    ):
+        mock_telegram_service.get_admin_user_ids.return_value = ["111"]
+        result = await receive_log_alert(request)
+
+    assert result == {"ok": True}
+    mock_notification_service.return_value.create_message.assert_called_once()
+
+
 @pytest.mark.asyncio
 async def test_log_alert_rejects_non_localhost():
     request = _make_request({"text": "ERROR: boom", "source": "foo.service"}, host="203.0.113.1")
